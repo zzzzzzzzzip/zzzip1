@@ -49,8 +49,13 @@ if uploaded_file and title and author:
         st.markdown("---")
         if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # 메모리 상에서 파일 처리 (서버 디스크 공간 차지 안 함)
-                txt_content = uploaded_file.read().decode("utf-8", errors="ignore")
+            # 변경된 코드: cp949(윈도우 한글) 방식을 먼저 시도하고, 안 되면 utf-8로 읽습니다.
+raw_bytes = uploaded_file.read()
+try:
+    txt_content = raw_bytes.decode("cp949")
+except UnicodeDecodeError:
+    txt_content = raw_bytes.decode("utf-8", errors="ignore")
+
                 
                 book = epub.EpubBook()
                 book.set_identifier('web_generated_id_12345')
