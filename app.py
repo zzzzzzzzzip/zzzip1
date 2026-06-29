@@ -17,7 +17,6 @@ cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png) 선택 (선택사
 
 # --- 2. 책 정보 설정 ---
 st.subheader("2. 도서 정보 입력")
-# 파일 업로드 시 파일명을 도서명 기본값으로 자동 입력
 default_title = os.path.splitext(uploaded_file.name)[0] if uploaded_file else ""
 title = st.text_input("도서명", value=default_title)
 author = st.text_input("작가명", value="작자미상")
@@ -40,8 +39,22 @@ if toc_mode == "제공되는 양식에서 선택":
     else: 
         toc_pattern = r"^\d+\."
 else:
-    custom_word = st.text_input("기준 단어 입력 (예: '화' 입력 시 ➔ '1화', '2화' 기준 분리)")
-    toc_pattern = rf"^\d+\s*{re.escape(custom_word)}" if custom_word else None
+    # [개선] 앞뒤에 제목이나 공백이 길게 붙어 있어도 '숫자+화' 형태가 줄 안에 존재하면 인식하도록 변경
+    custom_word = st.text_input("기준 단어 입력", value="화")
+    if custom_word:
+        escaped_word = re.escape(custom_word)
+        # 문장 중간 어디든 [숫자 + 지정단어]가 있으면 매칭 (예: '소설제목 1화' 인식 가능)
+        toc_pattern = rf".*\d+\s*{escaped_word}"
+    else:
+        toc_pattern = None
+
+st.markdown("""
+<div style="background-color:#F0F2F6; padding:10px; border-radius:5px; margin-bottom:10px;">
+    <strong>💡 팁 (현재 파일 기준):</strong><br>
+    보내주신 파일처럼 <code>시한부를 즐겼을 뿐이었는데 1화</code> 형식일 때는 
+    <strong>[내가 직접 기준 단어 지정]</strong>을 선택하고 입력창에 <strong>화</strong>라고 적어주시면 완벽하게 분리됩니다!
+</div>
+""", unsafe_allowed_html=True)
 
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
@@ -53,21 +66,17 @@ if uploaded_file and title and author:
         st.markdown("---")
         if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # [대폭 개선] 웹소설/모바일 환경의 모든 한글 인코딩 깨짐을 방지하는 다중 디코딩 시스템
                 raw_bytes = uploaded_file.read()
                 txt_content = None
                 
-                # 시도해볼 인코딩 목록 (모바일 다운로드 파일 및 특수 한글 인코딩 포함)
                 encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
-                
                 for enc in encodings:
                     try:
                         txt_content = raw_bytes.decode(enc)
-                        break  # 성공하면 루프 탈출
+                        break
                     except UnicodeDecodeError:
                         continue
                 
-                # 만약 다 실패하면 강제로 처리 (최후의 보루)
                 if txt_content is None:
                     txt_content = raw_bytes.decode("utf-8", errors="ignore")
                 
@@ -77,11 +86,9 @@ if uploaded_file and title and author:
                 book.set_language('ko')
                 book.add_author(author)
 
-                # 표지 추가
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # CSS 스타일 (들여쓰기 적용)
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -91,7 +98,6 @@ if uploaded_file and title and author:
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
 
-                # 텍스트 쪼개기
                 lines = txt_content.splitlines()
                 chapters = []
                 current_chapter_title = "프롤로그"
@@ -114,7 +120,6 @@ if uploaded_file and title and author:
                 if current_chapter_lines:
                     chapters.append((current_chapter_title, current_chapter_lines))
 
-                # HTML 생성
                 epub_chapters = []
                 for i, (ch_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
@@ -132,11 +137,8 @@ if uploaded_file and title and author:
                 book.toc = tuple(epub_chapters)
                 book.add_item(epub.EpubNcx())
                 book.add_item(epub.EpubNav())
-                
-                # 피드백 반영: 본문 장만 깔끔하게 보여주기 (기본 목차 숨김)
                 book.spine = epub_chapters 
 
-                # 결과물을 바이트 스트림으로 빌드
                 epub_fp = io.BytesIO()
                 epub.write_epub(epub_fp, book, {})
                 epub_data = epub_fp.getvalue()
