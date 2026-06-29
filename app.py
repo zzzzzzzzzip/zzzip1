@@ -53,11 +53,22 @@ if uploaded_file and title and author:
         st.markdown("---")
         if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # [개선] cp949(윈도우 한글)와 utf-8 인코딩을 모두 지원하여 외계어 깨짐 방지
+                # [대폭 개선] 웹소설/모바일 환경의 모든 한글 인코딩 깨짐을 방지하는 다중 디코딩 시스템
                 raw_bytes = uploaded_file.read()
-                try:
-                    txt_content = raw_bytes.decode("cp949")
-                except UnicodeDecodeError:
+                txt_content = None
+                
+                # 시도해볼 인코딩 목록 (모바일 다운로드 파일 및 특수 한글 인코딩 포함)
+                encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
+                
+                for enc in encodings:
+                    try:
+                        txt_content = raw_bytes.decode(enc)
+                        break  # 성공하면 루프 탈출
+                    except UnicodeDecodeError:
+                        continue
+                
+                # 만약 다 실패하면 강제로 처리 (최후의 보루)
+                if txt_content is None:
                     txt_content = raw_bytes.decode("utf-8", errors="ignore")
                 
                 book = epub.EpubBook()
