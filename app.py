@@ -39,7 +39,7 @@ if toc_mode == "제공되는 양식에서 선택":
     else: 
         toc_pattern = r"^\d+\."
 else:
-    # 앞뒤에 제목이나 공백이 길게 붙어 있어도 '숫자+화' 형태가 줄 안에 존재하면 인식하도록 설정
+    # 앞뒤에 제목이 붙어 있어도 '숫자+화' 형태가 줄 안에 존재하면 인식하도록 설정
     custom_word = st.text_input("기준 단어 입력", value="화")
     if custom_word:
         escaped_word = re.escape(custom_word)
@@ -48,7 +48,6 @@ else:
     else:
         toc_pattern = None
 
-# [개선] 에러가 났던 HTML 구역을 가장 안전한 Streamlit 내장 안내창으로 전면 교체했습니다.
 st.info("💡 팁: 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
@@ -60,11 +59,21 @@ if uploaded_file and title and author:
         st.markdown("---")
         if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # cp949(윈도우 한글)와 utf-8 인코딩을 모두 지원하여 외계어 깨짐 방지
+                # [복구 및 강화] 모바일/웹소설 파일의 모든 특수 한글 인코딩을 완벽하게 걸러내는 다중 디코딩 레이어
                 raw_bytes = uploaded_file.read()
-                try:
-                    txt_content = raw_bytes.decode("cp949")
-                except UnicodeDecodeError:
+                txt_content = None
+                
+                # 시도해볼 인코딩 목록 전체 가동
+                encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
+                for enc in encodings:
+                    try:
+                        txt_content = raw_bytes.decode(enc)
+                        break  # 성공하면 루프 탈출
+                    except UnicodeDecodeError:
+                        continue
+                
+                # 모든 시도가 실패할 경우 최후의 보루
+                if txt_content is None:
                     txt_content = raw_bytes.decode("utf-8", errors="ignore")
                 
                 book = epub.EpubBook()
@@ -73,11 +82,9 @@ if uploaded_file and title and author:
                 book.set_language('ko')
                 book.add_author(author)
 
-                # 표지 추가
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # CSS 스타일 (들여쓰기 적용)
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -87,7 +94,6 @@ if uploaded_file and title and author:
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
 
-                # 텍스트 쪼개기
                 lines = txt_content.splitlines()
                 chapters = []
                 current_chapter_title = "프롤로그"
@@ -110,7 +116,6 @@ if uploaded_file and title and author:
                 if current_chapter_lines:
                     chapters.append((current_chapter_title, current_chapter_lines))
 
-                # HTML 생성
                 epub_chapters = []
                 for i, (ch_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
@@ -128,11 +133,8 @@ if uploaded_file and title and author:
                 book.toc = tuple(epub_chapters)
                 book.add_item(epub.EpubNcx())
                 book.add_item(epub.EpubNav())
-                
-                # 본문 장만 깔끔하게 보여주기 (기본 목차 숨김)
                 book.spine = epub_chapters 
 
-                # 결과물을 바이트 스트림으로 빌드
                 epub_fp = io.BytesIO()
                 epub.write_epub(epub_fp, book, {})
                 epub_data = epub_fp.getvalue()
