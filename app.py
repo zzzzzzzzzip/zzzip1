@@ -12,7 +12,7 @@ st.write("스마트폰에서도 간편하게 텍스트를 전자책으로 변환
 
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
-uploaded_file = st.file_saver = st.file_uploader("텍스트 파일 (*.txt) 선택", type=["txt"])
+uploaded_file = st.file_uploader("텍스트 파일 (*.txt) 선택", type=["txt"])
 cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png) 선택 (선택사항)", type=["jpg", "jpeg", "png"])
 
 # --- 2. 책 정보 설정 ---
@@ -31,10 +31,14 @@ if toc_mode == "제공되는 양식에서 선택":
         "양식 선택",
         ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
     )
-    if "#001" in preset: toc_pattern = r"^#\s*\d+"
-    elif "제 1화" in preset: toc_pattern = r"^제\s*\d+\s*[화|장|편]"
-    elif "Chapter" in preset: toc_pattern = r"^Chapter\s*\d+"
-    else: toc_pattern = r"^\d+\."
+    if "#001" in preset: 
+        toc_pattern = r"^#\s*\d+"
+    elif "제 1화" in preset: 
+        toc_pattern = r"^제\s*\d+\s*[화|장|편]"
+    elif "Chapter" in preset: 
+        toc_pattern = r"^Chapter\s*\d+"
+    else: 
+        toc_pattern = r"^\d+\."
 else:
     custom_word = st.text_input("기준 단어 입력 (예: '화' 입력 시 ➔ '1화', '2화' 기준 분리)")
     toc_pattern = rf"^\d+\s*{re.escape(custom_word)}" if custom_word else None
@@ -47,15 +51,14 @@ if uploaded_file and title and author:
         st.warning("직접 입력 칸에 기준 단어를 적어주세요.")
     else:
         st.markdown("---")
-                if st.button("🚀 EPUB 변환하기", use_container_width=True):
+        if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # ⚠️ 아래 6줄의 맨 앞 들여쓰기 칸 수가 정확히 맞아야 합니다!
+                # [개선] cp949(윈도우 한글)와 utf-8 인코딩을 모두 지원하여 외계어 깨짐 방지
                 raw_bytes = uploaded_file.read()
                 try:
                     txt_content = raw_bytes.decode("cp949")
                 except UnicodeDecodeError:
                     txt_content = raw_bytes.decode("utf-8", errors="ignore")
-                
                 
                 book = epub.EpubBook()
                 book.set_identifier('web_generated_id_12345')
@@ -67,7 +70,7 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # CSS 스타일 (들여쓰기)
+                # CSS 스타일 (들여쓰기 적용)
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -86,7 +89,8 @@ if uploaded_file and title and author:
 
                 for line in lines:
                     line = line.strip()
-                    if not line: continue
+                    if not line: 
+                        continue
                     
                     if compiled_pattern.match(line):
                         if current_chapter_lines:
@@ -118,7 +122,7 @@ if uploaded_file and title and author:
                 book.add_item(epub.EpubNcx())
                 book.add_item(epub.EpubNav())
                 
-                # 피드백 반영: 본문 장만 보여주고 목차창은 숨기기 (방법 B 적용)
+                # 피드백 반영: 본문 장만 깔끔하게 보여주기 (기본 목차 숨김)
                 book.spine = epub_chapters 
 
                 # 결과물을 바이트 스트림으로 빌드
