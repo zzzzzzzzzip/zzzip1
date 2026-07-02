@@ -31,22 +31,22 @@ if toc_mode == "제공되는 양식에서 선택":
         ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
     )
     if "#001" in preset: 
-        toc_pattern = r"^#\s*\d+"
+        toc_pattern = r"#\s*\d+"
     elif "제 1화" in preset: 
-        toc_pattern = r"^제\s*\d+\s*[화|장|편]"
+        toc_pattern = r"제\s*\d+\s*[화|장|편]"
     elif "Chapter" in preset: 
-        toc_pattern = r"^Chapter\s*\d+"
+        toc_pattern = r"Chapter\s*\d+"
     else: 
-        toc_pattern = r"^\d+\."
+        toc_pattern = r"\d+\."
 else:
     custom_word = st.text_input("기준 단어 입력", value="화")
     if custom_word:
         escaped_word = re.escape(custom_word)
-        toc_pattern = rf".*\d+\s*{escaped_word}"
+        # 줄 안 어디든 [숫자 + 지정단어]가 있으면 매칭
+        toc_pattern = rf"\d+\s*{escaped_word}"
     else:
         toc_pattern = None
 
-# [개선] 요청에 따라 특정 소설 예시를 빼고 깔끔한 안내 문구로 교체했습니다.
 st.info("💡 팁: 제목 뒤에 숫자가 붙는 웹소설 형태의 파일은 [내가 직접 기준 단어 지정]을 누르고 해당 단어(예: 화 또는 장)를 입력하시면 정확하게 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
@@ -81,7 +81,6 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # [개선] h2(화 제목)의 글자 크기를 기존 기본값(2em)에서 1.4em으로 줄이고, 여백을 조절했습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -103,11 +102,14 @@ if uploaded_file and title and author:
                     if not line: 
                         continue
                     
-                    if compiled_pattern.match(line):
+                    # [개선] 문장 검색 및 추출 로직 변경
+                    match = compiled_pattern.search(line)
+                    if match:
                         if current_chapter_lines:
                             chapters.append((current_chapter_title, current_chapter_lines))
                             current_chapter_lines = []
-                        current_chapter_title = line
+                        # 전체 줄(line) 대신 찾은 패턴('1화', '2화' 등) 부분만 쏙 빼서 제목으로 지정합니다.
+                        current_chapter_title = match.group().strip()
                     else:
                         current_chapter_lines.append(line)
                         
@@ -118,12 +120,12 @@ if uploaded_file and title and author:
                 for i, (ch_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     
-                    # [개선] 화 제목 상단에도 무조건 한 줄 공백을 삽입합니다.
+                    # 화 제목 상단 공백
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     
                     html_content += f'<h2>{ch_title}</h2>'
                     
-                    # 화 제목 하단에 빈 줄 3개 유지
+                    # 화 제목 하단에 빈 줄 3개
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
