@@ -81,11 +81,11 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # [개선] h2(화 제목)의 글자 크기를 기존 기본값(2em)에서 1.6em으로 줄이고, 여백을 조절했습니다.
+                # [개선] h2(화 제목)의 글자 크기를 기존 기본값(2em)에서 1.4em으로 줄이고, 여백을 조절했습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
-                h2 { text-align: center; font-size: 1.6em; margin-top: 1.5em; margin-bottom: 0.8em; }
+                h2 { text-align: center; font-size: 1.4em; margin-top: 1.5em; margin-bottom: 0.8em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
