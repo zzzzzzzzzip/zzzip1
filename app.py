@@ -39,16 +39,14 @@ if toc_mode == "제공되는 양식에서 선택":
     else: 
         toc_pattern = r"^\d+\."
 else:
-    # 앞뒤에 제목이 붙어 있어도 '숫자+화' 형태가 줄 안에 존재하면 인식하도록 설정
     custom_word = st.text_input("기준 단어 입력", value="화")
     if custom_word:
         escaped_word = re.escape(custom_word)
-        # 문장 중간 어디든 [숫자 + 지정단어]가 있으면 매칭 (예: '소설제목 1화' 인식 가능)
         toc_pattern = rf".*\d+\s*{escaped_word}"
     else:
         toc_pattern = None
 
-st.info("💡 팁: 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
+st.info("💡 팁: '시한부를 즐겼을 뿐이었는데 1화'처럼 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 # --- 4. 변환 및 다운로드 기능 ---
@@ -59,20 +57,17 @@ if uploaded_file and title and author:
         st.markdown("---")
         if st.button("🚀 EPUB 변환하기", use_container_width=True):
             try:
-                # [복구 및 강화] 모바일/웹소설 파일의 모든 특수 한글 인코딩을 완벽하게 걸러내는 다중 디코딩 레이어
                 raw_bytes = uploaded_file.read()
                 txt_content = None
                 
-                # 시도해볼 인코딩 목록 전체 가동
                 encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
                 for enc in encodings:
                     try:
                         txt_content = raw_bytes.decode(enc)
-                        break  # 성공하면 루프 탈출
+                        break
                     except UnicodeDecodeError:
                         continue
                 
-                # 모든 시도가 실패할 경우 최후의 보루
                 if txt_content is None:
                     txt_content = raw_bytes.decode("utf-8", errors="ignore")
                 
@@ -85,11 +80,13 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
+                # [개선] 여백 조절: margin을 2.5em에서 딱 2줄 느낌인 2.0em으로 수정했습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
                 h2 { text-align: center; margin-top: 2em; margin-bottom: 1em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
+                .scene-divider { text-align: center; text-indent: 0; margin: 2.0em 0; font-weight: bold; }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
@@ -121,7 +118,10 @@ if uploaded_file and title and author:
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     html_content += f'<h2>{ch_title}</h2>'
                     for line in ch_lines:
-                        html_content += f'<p>{line}</p>'
+                        if line == '* * *' or line.replace(' ', '') == '***':
+                            html_content += f'<p class="scene-divider">{line}</p>'
+                        else:
+                            html_content += f'<p>{line}</p>'
                     html_content += '</body></html>'
 
                     chapter = epub.EpubHtml(title=ch_title, file_name=f'chap_{i+1}.xhtml', lang='ko')
