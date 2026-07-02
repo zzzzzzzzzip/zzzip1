@@ -46,7 +46,7 @@ else:
     else:
         toc_pattern = None
 
-st.info("💡 팁: 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
+st.info("💡 팁: '시한부를 즐겼을 뿐이었는데 1화'처럼 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 # --- 4. 변환 및 다운로드 기능 ---
@@ -80,13 +80,12 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
-                # [개선] 여백을 3.0em으로 넉넉하게 늘리고, font-weight: bold를 삭제하여 굵은 글씨 효과를 없앴습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
                 h2 { text-align: center; margin-top: 2em; margin-bottom: 1em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
-                .scene-divider { text-align: center; text-indent: 0; margin: 3.0em 0; }
+                .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
@@ -117,9 +116,19 @@ if uploaded_file and title and author:
                 for i, (ch_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     html_content += f'<h2>{ch_title}</h2>'
+                    
+                    # [개선] 화 제목(h2) 바로 다음에 진짜 물리적인 공백 줄 3개를 강제로 집어넣습니다.
+                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    
                     for line in ch_lines:
                         if line == '* * *' or line.replace(' ', '') == '***':
+                            html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += f'<p class="scene-divider">{line}</p>'
+                            html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         else:
                             html_content += f'<p>{line}</p>'
                     html_content += '</body></html>'
