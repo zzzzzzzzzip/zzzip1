@@ -46,7 +46,8 @@ else:
     else:
         toc_pattern = None
 
-st.info("💡 팁: '시한부를 즐겼을 뿐이었는데 1화'처럼 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
+# [개선] 요청에 따라 특정 소설 예시를 빼고 깔끔한 안내 문구로 교체했습니다.
+st.info("💡 팁: 제목 뒤에 숫자가 붙는 웹소설 형태의 파일은 [내가 직접 기준 단어 지정]을 누르고 해당 단어(예: 화 또는 장)를 입력하시면 정확하게 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 # --- 4. 변환 및 다운로드 기능 ---
@@ -80,10 +81,11 @@ if uploaded_file and title and author:
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
 
+                # [개선] h2(화 제목)의 글자 크기를 기존 기본값(2em)에서 1.6em으로 줄이고, 여백을 조절했습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
-                h2 { text-align: center; margin-top: 2em; margin-bottom: 1em; }
+                h2 { text-align: center; font-size: 1.6em; margin-top: 1.5em; margin-bottom: 0.8em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
@@ -115,9 +117,13 @@ if uploaded_file and title and author:
                 epub_chapters = []
                 for i, (ch_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
+                    
+                    # [개선] 화 제목 상단에도 무조건 한 줄 공백을 삽입합니다.
+                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    
                     html_content += f'<h2>{ch_title}</h2>'
                     
-                    # [개선] 화 제목(h2) 바로 다음에 진짜 물리적인 공백 줄 3개를 강제로 집어넣습니다.
+                    # 화 제목 하단에 빈 줄 3개 유지
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
