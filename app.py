@@ -46,7 +46,7 @@ else:
     else:
         toc_pattern = None
 
-st.info("💡 팁: '시한부를 즐겼을 뿐이었는데 1화'처럼 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
+st.info("💡 팁: 제목 뒤에 숫자가 붙는 소설은 [내가 직접 기준 단어 지정]을 누르고 '화'를 입력하시면 정확하게 장이 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 # --- 4. 변환 및 다운로드 기능 ---
@@ -63,91 +63,4 @@ if uploaded_file and title and author:
                 encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
                 for enc in encodings:
                     try:
-                        txt_content = raw_bytes.decode(enc)
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                
-                if txt_content is None:
-                    txt_content = raw_bytes.decode("utf-8", errors="ignore")
-                
-                book = epub.EpubBook()
-                book.set_identifier('web_generated_id_12345')
-                book.set_title(title)
-                book.set_language('ko')
-                book.add_author(author)
-
-                if cover_file:
-                    book.set_cover("cover.jpg", cover_file.read())
-
-                # [개선] 여백 조절: margin을 2.5em에서 딱 2줄 느낌인 2.0em으로 수정했습니다.
-                style = '''
-                @page { margin: 5%; }
-                body { font-family: sans-serif; line-height: 1.6; }
-                h2 { text-align: center; margin-top: 2em; margin-bottom: 1em; }
-                p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
-                .scene-divider { text-align: center; text-indent: 0; margin: 2.0em 0; font-weight: bold; }
-                '''
-                nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
-                book.add_item(nav_css)
-
-                lines = txt_content.splitlines()
-                chapters = []
-                current_chapter_title = "프롤로그"
-                current_chapter_lines = []
-                compiled_pattern = re.compile(toc_pattern)
-
-                for line in lines:
-                    line = line.strip()
-                    if not line: 
-                        continue
-                    
-                    if compiled_pattern.match(line):
-                        if current_chapter_lines:
-                            chapters.append((current_chapter_title, current_chapter_lines))
-                            current_chapter_lines = []
-                        current_chapter_title = line
-                    else:
-                        current_chapter_lines.append(line)
-                        
-                if current_chapter_lines:
-                    chapters.append((current_chapter_title, current_chapter_lines))
-
-                epub_chapters = []
-                for i, (ch_title, ch_lines) in enumerate(chapters):
-                    html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
-                    html_content += f'<h2>{ch_title}</h2>'
-                    for line in ch_lines:
-                        if line == '* * *' or line.replace(' ', '') == '***':
-                            html_content += f'<p class="scene-divider">{line}</p>'
-                        else:
-                            html_content += f'<p>{line}</p>'
-                    html_content += '</body></html>'
-
-                    chapter = epub.EpubHtml(title=ch_title, file_name=f'chap_{i+1}.xhtml', lang='ko')
-                    chapter.content = html_content
-                    chapter.add_item(nav_css)
-                    book.add_item(chapter)
-                    epub_chapters.append(chapter)
-
-                book.toc = tuple(epub_chapters)
-                book.add_item(epub.EpubNcx())
-                book.add_item(epub.EpubNav())
-                book.spine = epub_chapters 
-
-                epub_fp = io.BytesIO()
-                epub.write_epub(epub_fp, book, {})
-                epub_data = epub_fp.getvalue()
-
-                st.success("🎉 변환 성공! 아래 버튼을 눌러 저장하세요.")
-                st.download_button(
-                    label="📥 EPUB 파일 다운로드",
-                    data=epub_data,
-                    file_name=f"{title}.epub",
-                    mime="application/epub+zip",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error(f"오류가 발생했습니다: {e}")
-else:
-    st.info("파일 업로드 및 도서 정보를 모두 입력하시면 변환 버튼이 나타납니다.")
+                        txt_content = raw_bytes.decode(
