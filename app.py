@@ -31,21 +31,25 @@ if toc_mode == "제공되는 양식에서 선택":
         ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
     )
     if "#001" in preset: 
-        toc_pattern = r"#\s*\d+"
+        toc_pattern = r"#\s*\d+.*"
     elif "제 1화" in preset: 
-        toc_pattern = r"제\s*\d+\s*[화|장|편]"
+        toc_pattern = r"제\s*\d+\s*[화|장|편].*"
     elif "Chapter" in preset: 
-        toc_pattern = r"Chapter\s*\d+"
+        toc_pattern = r"Chapter\s*\d+.*"
     else: 
-        toc_pattern = r"\d+\."
+        toc_pattern = r"\d+\..*"
 else:
     custom_word = st.text_input("기준 단어 입력", value="화")
     if custom_word:
         escaped_word = re.escape(custom_word)
-        # 줄 안 어디든 [숫자 + 지정단어]가 있으면 매칭
-        toc_pattern = rf"\d+\s*{escaped_word}"
+        # 줄 내부 어디든 [숫자 + 지정단어]를 포함한 그 뒤 전체를 매칭하기 위해 .* 추가
+        toc_pattern = rf"\d+\s*{escaped_word}.*"
     else:
         toc_pattern = None
+
+# [개선] 소설제목 제외 및 소제목 유지 선택 옵션 추가
+st.markdown("**목차 텍스트 정제 설정**")
+clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
 st.info("💡 팁: 제목 뒤에 숫자가 붙는 웹소설 형태의 파일은 [내가 직접 기준 단어 지정]을 누르고 해당 단어(예: 화 또는 장)를 입력하시면 정확하게 분리됩니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
@@ -102,14 +106,20 @@ if uploaded_file and title and author:
                     if not line: 
                         continue
                     
-                    # [개선] 문장 검색 및 추출 로직 변경
+                    # [개선] 패턴 매칭 및 추출 범위 확대
                     match = compiled_pattern.search(line)
                     if match:
                         if current_chapter_lines:
                             chapters.append((current_chapter_title, current_chapter_lines))
                             current_chapter_lines = []
-                        # 전체 줄(line) 대신 찾은 패턴('1화', '2화' 등) 부분만 쏙 빼서 제목으로 지정합니다.
-                        current_chapter_title = match.group().strip()
+                        
+                        extracted_title = match.group().strip()
+                        
+                        # 체크박스가 켜져 있으면 앞의 소설 제목은 지우고 [화수 + 뒷부분(소제목)]만 남김
+                        if clean_title_option:
+                            current_chapter_title = extracted_title
+                        else:
+                            current_chapter_title = line
                     else:
                         current_chapter_lines.append(line)
                         
@@ -122,10 +132,9 @@ if uploaded_file and title and author:
                     
                     # 화 제목 상단 공백
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                    
                     html_content += f'<h2>{ch_title}</h2>'
                     
-                    # 화 제목 하단에 빈 줄 3개
+                    # 화 제목 하단 빈 줄 3개
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
