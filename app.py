@@ -50,8 +50,11 @@ else:
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
 clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
-# 다음 줄 소제목 인식 체크박스
+# 다음 줄 소제목 설정 구역
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
+
+# [신규 기능] 목차 연결 선택 옵션 체크박스 추가
+join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
 
 st.info("💡 팁: 기존에 갖고 있던 EPUB 파일을 업로드하면 목차 구분 설정을 건드릴 필요 없이, 내 커스텀 스타일(화 제목 여백, 크기, * * * 가운데 정렬 및 줄바꿈)만 똑같이 입혀서 새로 내려받아 줍니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
@@ -112,6 +115,7 @@ if uploaded_file and title and author:
                     for line in lines:
                         line = line.strip()
                         if not line: 
+                        
                             continue
                         
                         match = compiled_pattern.search(line)
@@ -151,12 +155,12 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # [개선] 요청 조건 반영: 크기 1.2em, 색상 기본, 좌우정렬(justify) 적용
+                # [개선] 소제목 디자인 변경: 가운데 정렬(center)로 롤백, 들여쓰기 0
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
-                h2 { text-align: center; font-size: 1.4em; margin-top: 1.5em; margin-bottom: 0.8em; }
-                .sub-title { text-align: justify; font-size: 1.2em; text-indent: 1em; margin-top: 0.5em; margin-bottom: 0.5em; }
+                h2 { text-align: center; font-size: 1.4em; margin-top: 1.5em; margin-bottom: 0.2em; }
+                .sub-title { text-align: center; font-size: 1.2em; text-indent: 0; margin-top: 0; margin-bottom: 1.0em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
@@ -165,24 +169,26 @@ if uploaded_file and title and author:
 
                 epub_chapters = []
                 for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
+                    
+                    # [개선] '목차에 이어서 표시하기' 옵션이 켜져 있고 소제목이 있다면 제목 텍스트를 결합
+                    display_title = ch_title
+                    if sub_title_option and join_title_option and ch_sub_title:
+                        display_title = f"{ch_title} - {ch_sub_title}" if "화" in ch_title else f"{ch_title} {ch_sub_title}"
+
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     
                     # 화 제목 상단 공백
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                    html_content += f'<h2>{ch_title}</h2>'
+                    html_content += f'<h2>{display_title}</h2>'
                     
-                    if ch_sub_title:
-                        # [개선] 화 제목과 소제목 사이: 기존 본문과 목차 사이 간격과 동일하게 '3줄' 띄우기
-                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                        
+                    if ch_sub_title and not join_title_option:
+                        # [개선] 목차에 이어붙이지 않는 경우: 화 제목 바로 아랫줄에 가운데 정렬로 배치
                         html_content += f'<p class="sub-title">{ch_sub_title}</p>'
                         
-                        # [개선] 소제목과 본문 사이: 딱 '1줄' 띄우기
+                        # 소제목 끝나고 본문 시작 전 물리적인 빈 줄 1개 분량 여백
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     else:
-                        # 소제목이 없는 일반 화인 경우 기존대로 제목 밑에 빈 줄 3개
+                        # 소제목이 없거나 목차에 이어붙인 경우 제목 밑에 빈 줄 3개
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -198,7 +204,8 @@ if uploaded_file and title and author:
                             html_content += f'<p>{line}</p>'
                     html_content += '</body></html>'
 
-                    chapter = epub.EpubHtml(title=ch_title, file_name=f'chap_{i+1}.xhtml', lang='ko')
+                    # 실제 앱 목차 트리 구조에도 display_title을 반영
+                    chapter = epub.EpubHtml(title=display_title, file_name=f'chap_{i+1}.xhtml', lang='ko')
                     chapter.content = html_content
                     chapter.add_item(nav_css)
                     book.add_item(chapter)
