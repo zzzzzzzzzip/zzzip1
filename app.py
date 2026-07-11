@@ -50,7 +50,7 @@ else:
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
 clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
-# [신규 기능] 다음 줄 소제목 인식 체크박스 추가
+# 다음 줄 소제목 인식 체크박스
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
 
 st.info("💡 팁: 기존에 갖고 있던 EPUB 파일을 업로드하면 목차 구분 설정을 건드릴 필요 없이, 내 커스텀 스타일(화 제목 여백, 크기, * * * 가운데 정렬 및 줄바꿈)만 똑같이 입혀서 새로 내려받아 줍니다!")
@@ -88,7 +88,6 @@ if uploaded_file and title and author:
                                 if ch_lines[0] == ch_title:
                                     ch_lines.pop(0)
                                 if ch_lines:
-                                    # 이펍 파싱 시에는 다음 줄 소제목 구분을 빈 서브타이틀 구조로 넘김
                                     chapters.append((ch_title, None, ch_lines))
                 else:
                     # --- 기존 TXT 파일 파싱 구역 ---
@@ -106,7 +105,7 @@ if uploaded_file and title and author:
 
                     lines = txt_content.splitlines()
                     current_chapter_title = "프롤로그"
-                    current_sub_title = None # 소제목 저장용 변수
+                    current_sub_title = None
                     current_chapter_lines = []
                     compiled_pattern = re.compile(toc_pattern)
 
@@ -128,7 +127,6 @@ if uploaded_file and title and author:
                             else:
                                 current_chapter_title = line
                         else:
-                            # [핵심 로직] 체크박스가 켜져 있고, 새 화가 시작된 직후 첫 줄이라면 소제목으로 획득
                             if sub_title_option and not current_chapter_lines and current_sub_title is None and current_chapter_title != "프롤로그":
                                 current_sub_title = line
                             else:
@@ -153,13 +151,12 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # [개선] .sub-title (소제목)용 CSS 디자인 추가
-                # h2보다 작게(1.1em), 가운데 정렬, 들여쓰기 없음
+                # [개선] 요청 조건 반영: 크기 1.2em, 색상 기본, 좌우정렬(justify) 적용
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
                 h2 { text-align: center; font-size: 1.4em; margin-top: 1.5em; margin-bottom: 0.8em; }
-                .sub-title { text-align: center; font-size: 1.1em; text-indent: 0; margin-top: 0.5em; margin-bottom: 0.5em; color: #555555; }
+                .sub-title { text-align: justify; font-size: 1.2em; text-indent: 1em; margin-top: 0.5em; margin-bottom: 0.5em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
@@ -174,13 +171,15 @@ if uploaded_file and title and author:
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += f'<h2>{ch_title}</h2>'
                     
-                    # [핵심 로직] 소제목이 존재하는 화인 경우
                     if ch_sub_title:
-                        # 화 제목과 소제목 사이 공백 1줄
+                        # [개선] 화 제목과 소제목 사이: 기존 본문과 목차 사이 간격과 동일하게 '3줄' 띄우기
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        
                         html_content += f'<p class="sub-title">{ch_sub_title}</p>'
-                        # 소제목 끝나고 본문 시작 전 물리적인 빈 줄 2개 삽입 규칙
-                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        
+                        # [개선] 소제목과 본문 사이: 딱 '1줄' 띄우기
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     else:
                         # 소제목이 없는 일반 화인 경우 기존대로 제목 밑에 빈 줄 3개
