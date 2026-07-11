@@ -3,16 +3,17 @@ import io
 import os
 import re
 from ebooklib import epub
+from bs4 import BeautifulSoup
 
 # 웹페이지 기본 설정 (스마트폰 해상도 대응)
-st.set_page_config(page_title="TXT to EPUB 변환기", page_icon="📚", layout="centered")
+st.set_page_config(page_title="통합 EPUB 변환기", page_icon="📚", layout="centered")
 
-st.title("📚 TXT ➔ EPUB 웹 변환기")
-st.write("스마트폰에서도 간편하게 텍스트를 전자책으로 변환하세요!")
+st.title("📚 TXT / EPUB 통합 변환기")
+st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완벽하게 재가공하세요!")
 
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
-uploaded_file = st.file_uploader("텍스트 파일 (*.txt) 선택", type=["txt"])
+uploaded_file = st.file_uploader("파일 선택 (*.txt, *.epub)", type=["txt", "epub"])
 cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png) 선택 (선택사항)", type=["jpg", "jpeg", "png"])
 
 # --- 2. 책 정보 설정 ---
@@ -22,7 +23,7 @@ title = st.text_input("도서명", value=default_title)
 author = st.text_input("작가명", value="작자미상")
 
 # --- 3. 목차 설정 구역 ---
-st.subheader("3. 목차 자동 구분 기준")
+st.subheader("3. 목차 자동 구분 기준 (TXT 파일 전용)")
 toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택", "내가 직접 기준 단어 지정"], horizontal=True)
 
 if toc_mode == "제공되는 양식에서 선택":
@@ -42,40 +43,101 @@ else:
     custom_word = st.text_input("기준 단어 입력", value="화")
     if custom_word:
         escaped_word = re.escape(custom_word)
-        # 줄 내부 어디든 [숫자 + 지정단어]를 포함한 그 뒤 전체를 매칭하기 위해 .* 추가
         toc_pattern = rf"\d+\s*{escaped_word}.*"
     else:
         toc_pattern = None
 
-# [개선] 소설제목 제외 및 소제목 유지 선택 옵션 추가
-st.markdown("**목차 텍스트 정제 설정**")
+st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
 clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
-st.info("💡 팁: 제목 뒤에 숫자가 붙는 웹소설 형태의 파일은 [내가 직접 기준 단어 지정]을 누르고 해당 단어(예: 화 또는 장)를 입력하시면 정확하게 분리됩니다!")
+# [신규 기능] 다음 줄 소제목 인식 체크박스 추가
+sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
+
+st.info("💡 팁: 기존에 갖고 있던 EPUB 파일을 업로드하면 목차 구분 설정을 건드릴 필요 없이, 내 커스텀 스타일(화 제목 여백, 크기, * * * 가운데 정렬 및 줄바꿈)만 똑같이 입혀서 새로 내려받아 줍니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 # --- 4. 변환 및 다운로드 기능 ---
 if uploaded_file and title and author:
-    if toc_mode == "내가 직접 기준 단어 지정" and not toc_pattern:
+    if uploaded_file.name.endswith(".txt") and toc_mode == "내가 직접 기준 단어 지정" and not toc_pattern:
         st.warning("직접 입력 칸에 기준 단어를 적어주세요.")
     else:
         st.markdown("---")
-        if st.button("🚀 EPUB 변환하기", use_container_width=True):
+        if st.button("🚀 커스텀 스타일로 변환하기", use_container_width=True):
             try:
-                raw_bytes = uploaded_file.read()
-                txt_content = None
-                
-                encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
-                for enc in encodings:
-                    try:
-                        txt_content = raw_bytes.decode(enc)
-                        break
-                    except UnicodeDecodeError:
-                        continue
-                
-                if txt_content is None:
-                    txt_content = raw_bytes.decode("utf-8", errors="ignore")
-                
+                chapters = []
+                is_epub = uploaded_file.name.endswith(".epub")
+
+                if is_epub:
+                    # --- 기존 EPUB 파일 파싱 구역 ---
+                    epub_stream = io.BytesIO(uploaded_file.read())
+                    input_book = epub.read_epub(epub_stream)
+                    
+                    for item in input_book.get_items():
+                        if item.get_type() == 9: 
+                            soup = BeautifulSoup(item.get_content(), "html.parser")
+                            h_tag = soup.find(["h1", "h2", "h3"])
+                            ch_title = h_tag.get_text().strip() if h_tag else "본문"
+                            
+                            ch_lines = []
+                            for p in soup.find_all("p"):
+                                p_text = p.get_text().strip()
+                                if p_text:
+                                    ch_lines.append(p_text)
+                            
+                            if ch_lines:
+                                if ch_lines[0] == ch_title:
+                                    ch_lines.pop(0)
+                                if ch_lines:
+                                    # 이펍 파싱 시에는 다음 줄 소제목 구분을 빈 서브타이틀 구조로 넘김
+                                    chapters.append((ch_title, None, ch_lines))
+                else:
+                    # --- 기존 TXT 파일 파싱 구역 ---
+                    raw_bytes = uploaded_file.read()
+                    txt_content = None
+                    encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
+                    for enc in encodings:
+                        try:
+                            txt_content = raw_bytes.decode(enc)
+                            break
+                        except UnicodeDecodeError:
+                            continue
+                    if txt_content is None:
+                        txt_content = raw_bytes.decode("utf-8", errors="ignore")
+
+                    lines = txt_content.splitlines()
+                    current_chapter_title = "프롤로그"
+                    current_sub_title = None # 소제목 저장용 변수
+                    current_chapter_lines = []
+                    compiled_pattern = re.compile(toc_pattern)
+
+                    for line in lines:
+                        line = line.strip()
+                        if not line: 
+                            continue
+                        
+                        match = compiled_pattern.search(line)
+                        if match:
+                            if current_chapter_lines or current_sub_title:
+                                chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
+                                current_chapter_lines = []
+                                current_sub_title = None
+                            
+                            extracted_title = match.group().strip()
+                            if clean_title_option:
+                                current_chapter_title = extracted_title
+                            else:
+                                current_chapter_title = line
+                        else:
+                            # [핵심 로직] 체크박스가 켜져 있고, 새 화가 시작된 직후 첫 줄이라면 소제목으로 획득
+                            if sub_title_option and not current_chapter_lines and current_sub_title is None and current_chapter_title != "프롤로그":
+                                current_sub_title = line
+                            else:
+                                current_chapter_lines.append(line)
+                            
+                    if current_chapter_lines or current_sub_title:
+                        chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
+
+                # --- 공통: 내 커스텀 규칙대로 새 EPUB 빌드 구역 ---
                 book = epub.EpubBook()
                 book.set_identifier('web_generated_id_12345')
                 book.set_title(title)
@@ -84,60 +146,47 @@ if uploaded_file and title and author:
 
                 if cover_file:
                     book.set_cover("cover.jpg", cover_file.read())
+                elif is_epub:
+                    for item in input_book.get_items():
+                        if item.get_type() == 4: 
+                            if "cover" in item.get_name().lower():
+                                book.set_cover("cover.jpg", item.get_content())
+                                break
 
+                # [개선] .sub-title (소제목)용 CSS 디자인 추가
+                # h2보다 작게(1.1em), 가운데 정렬, 들여쓰기 없음
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
                 h2 { text-align: center; font-size: 1.4em; margin-top: 1.5em; margin-bottom: 0.8em; }
+                .sub-title { text-align: center; font-size: 1.1em; text-indent: 0; margin-top: 0.5em; margin-bottom: 0.5em; color: #555555; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
 
-                lines = txt_content.splitlines()
-                chapters = []
-                current_chapter_title = "프롤로그"
-                current_chapter_lines = []
-                compiled_pattern = re.compile(toc_pattern)
-
-                for line in lines:
-                    line = line.strip()
-                    if not line: 
-                        continue
-                    
-                    # [개선] 패턴 매칭 및 추출 범위 확대
-                    match = compiled_pattern.search(line)
-                    if match:
-                        if current_chapter_lines:
-                            chapters.append((current_chapter_title, current_chapter_lines))
-                            current_chapter_lines = []
-                        
-                        extracted_title = match.group().strip()
-                        
-                        # 체크박스가 켜져 있으면 앞의 소설 제목은 지우고 [화수 + 뒷부분(소제목)]만 남김
-                        if clean_title_option:
-                            current_chapter_title = extracted_title
-                        else:
-                            current_chapter_title = line
-                    else:
-                        current_chapter_lines.append(line)
-                        
-                if current_chapter_lines:
-                    chapters.append((current_chapter_title, current_chapter_lines))
-
                 epub_chapters = []
-                for i, (ch_title, ch_lines) in enumerate(chapters):
+                for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     
                     # 화 제목 상단 공백
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += f'<h2>{ch_title}</h2>'
                     
-                    # 화 제목 하단 빈 줄 3개
-                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    # [핵심 로직] 소제목이 존재하는 화인 경우
+                    if ch_sub_title:
+                        # 화 제목과 소제목 사이 공백 1줄
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += f'<p class="sub-title">{ch_sub_title}</p>'
+                        # 소제목 끝나고 본문 시작 전 물리적인 빈 줄 2개 삽입 규칙
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                    else:
+                        # 소제목이 없는 일반 화인 경우 기존대로 제목 밑에 빈 줄 3개
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     
                     for line in ch_lines:
                         if line == '* * *' or line.replace(' ', '') == '***':
@@ -165,9 +214,9 @@ if uploaded_file and title and author:
                 epub.write_epub(epub_fp, book, {})
                 epub_data = epub_fp.getvalue()
 
-                st.success("🎉 변환 성공! 아래 버튼을 눌러 저장하세요.")
+                st.success("🎉 변환 및 리스타일링 성공! 아래 버튼을 눌러 저장하세요.")
                 st.download_button(
-                    label="📥 EPUB 파일 다운로드",
+                    label="📥 가공된 EPUB 파일 다운로드",
                     data=epub_data,
                     file_name=f"{title}.epub",
                     mime="application/epub+zip",
