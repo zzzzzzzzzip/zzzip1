@@ -14,7 +14,8 @@ st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
 uploaded_file = st.file_uploader("파일 선택 (*.txt, *.epub)", type=["txt", "epub"])
-cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png) 선택 (선택사항)", type=["jpg", "jpeg", "png"])
+# [개선] 표지 이미지 업로더에 'webp' 확장자를 정식 추가했습니다.
+cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png, *.webp) 선택 (선택사항)", type=["jpg", "jpeg", "png", "webp"])
 
 # --- 2. 책 정보 설정 ---
 st.subheader("2. 도서 정보 입력")
@@ -145,8 +146,14 @@ if uploaded_file and title and author:
                 book.set_language('ko')
                 book.add_author(author)
 
+                # [개선] 표지 추가 시 업로드된 이미지 확장자를 동적으로 인식하여 저장
                 if cover_file:
-                    book.set_cover("cover.jpg", cover_file.read())
+                    cover_ext = os.path.splitext(cover_file.name)[1].lower()
+                    # webp일 경우 cover.webp로 저장하고 미디어 타입도 적절히 지정
+                    if cover_ext == ".webp":
+                        book.set_cover("cover.webp", cover_file.read())
+                    else:
+                        book.set_cover("cover.jpg", cover_file.read())
                 elif is_epub:
                     for item in input_book.get_items():
                         if item.get_type() == 4: 
@@ -154,7 +161,7 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # [개선] 소제목 크기를 요청에 따라 1.1em으로 정밀 조정했습니다.
+                # 스타일 시트
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -169,7 +176,6 @@ if uploaded_file and title and author:
                 epub_chapters = []
                 for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
                     
-                    # [개선] 요청 조건 반영: 대시(-) 기호 추가 없이 텍스트만 자연스럽게 한 칸 띄우고 이어 붙입니다.
                     display_title = ch_title
                     if sub_title_option and join_title_option and ch_sub_title:
                         display_title = f"{ch_title} {ch_sub_title}"
@@ -181,15 +187,11 @@ if uploaded_file and title and author:
                     html_content += f'<h2>{display_title}</h2>'
                     
                     if ch_sub_title and not join_title_option:
-                        # 화 제목 바로 아랫줄에 소제목을 배치
                         html_content += f'<p class="sub-title">{ch_sub_title}</p>'
-                        
-                        # [개선] 소제목과 본문 사이: 요청에 따라 정확히 빈 줄 3개 삽입 규칙 적용
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     else:
-                        # 소제목이 없거나 목차에 이어붙인 경우 제목 밑에 기존대로 빈 줄 3개
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -198,7 +200,8 @@ if uploaded_file and title and author:
                         if line == '* * *' or line.replace(' ', '') == '***':
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            html_content += f'<p class="scene-divider">{line}</p>'
+                            f_div = f'<p class="scene-divider">{line}</p>'
+                            html_content += f_div
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         else:
