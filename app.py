@@ -6,10 +6,10 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 
 # 웹페이지 기본 설정 (스마트폰 해상도 대응)
-st.set_page_config(page_title="통합 EPUB 변환기", page_icon="📚", layout="centered")
+st.set_page_config(page_title="EPUB 변환기", page_icon="📚", layout="centered")
 
-st.title("📚 TXT / EPUB 통합 변환기")
-st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완벽하게 재가공하세요!")
+st.title("📚 TXT / EPUB 변환기")
+st.write("텍스트 파일 / 이펍 파일 변환하기")
 
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
@@ -24,12 +24,12 @@ author = st.text_input("작가명", value="작자미상")
 
 # --- 3. 목차 설정 구역 ---
 st.subheader("3. 목차 자동 구분 기준 (TXT 파일 전용)")
-toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택", "내가 직접 기준 단어 지정"], horizontal=True)
+toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택", "직접 단어 지정"], horizontal=True)
 
 if toc_mode == "제공되는 양식에서 선택":
     preset = st.selectbox(
         "양식 선택",
-        ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
+        ["#001, #002", "제 1화, 제 2장", "Chapter 1, Chapter 2", "1., 2., 3."]
     )
     if "#001" in preset: 
         toc_pattern = r"#\s*\d+.*"
@@ -50,11 +50,14 @@ else:
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
 clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
+# [신규 기능] 도서명과 일치하는 본문 줄 삭제 옵션 추가
+remove_title_lines_option = st.checkbox("➔ 선택사항: 본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
+
 # 다음 줄 소제목 설정 구역
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
 join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
 
-# [신규 기능] 대사 앞뒤 자동 줄바꿈 옵션 추가
+# 본문 대사 레이아웃 설정
 st.markdown("**본문 대사 레이아웃 설정**")
 dialogue_spacing_option = st.checkbox("대사(따옴표)와 일반 본문 사이에 자동으로 빈 줄 넣기", value=True)
 
@@ -118,6 +121,13 @@ if uploaded_file and title and author:
                         line = line.strip()
                         if not line: 
                             continue
+                        
+                        # [핵심 개선] 도서명과 완전히 동일한 줄은 원천적으로 건너뜀 (대소문자 및 공백 제거 비교로 정확도 상승)
+                        if remove_title_lines_option and title:
+                            normalized_line = line.replace(" ", "").lower()
+                            normalized_title = title.replace(" ", "").lower()
+                            if normalized_line == normalized_title:
+                                continue
                         
                         match = compiled_pattern.search(line)
                         if match:
@@ -198,34 +208,27 @@ if uploaded_file and title and author:
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     
-                    # [핵심 개선] 대사/본문 전환 자동 줄바꿈 렌더링 로직
-                    prev_is_dialogue = None # 이전 문단이 대사였는지 기록하는 상태 플래그
+                    # 대사/본문 전환 자동 줄바꿈 렌더링 로직
+                    prev_is_dialogue = None
                     
                     for line in ch_lines:
-                        # 1. 장면 전환 기호 우선 처리
                         if line == '* * *' or line.replace(' ', '') == '***':
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += f'<p class="scene-divider">{line}</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            prev_is_dialogue = None # 장면이 전환되었으므로 대사 상태 초기화
+                            prev_is_dialogue = None
                             continue
                         
-                        # 2. 이번 문단이 대사인지 여부 판단 (따옴표로 시작하거나 대화 마크(-) 등으로 시작할 때)
                         is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
                         
-                        # 3. 대사 Spacing 옵션이 켜져 있을 때 조건별 줄바꿈 삽입
                         if dialogue_spacing_option and prev_is_dialogue is not None:
-                            # [조건 A] 일반 본문 ➔ 대사로 바뀔 때
                             if not prev_is_dialogue and is_dialogue:
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            # [조건 B] 대사 ➔ 일반 본문으로 돌아올 때
                             elif prev_is_dialogue and not is_dialogue:
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            # (대사 ➔ 대사 연속 상황이나 본문 ➔ 본문 연속 상황에서는 추가하지 않음!)
 
-                        # 4. 본문 문단 추가 및 상태 업데이트
                         html_content += f'<p>{line}</p>'
                         prev_is_dialogue = is_dialogue
 
