@@ -48,14 +48,14 @@ else:
         toc_pattern = None
 
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
-clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
+clean_title_option = st.checkbox("목차에서 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
 # [신규 기능] 도서명과 일치하는 본문 줄 삭제 옵션 추가
-remove_title_lines_option = st.checkbox("➔ 선택사항: 본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
+remove_title_lines_option = st.checkbox("본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
 
 # 다음 줄 소제목 설정 구역
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
-join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
+join_title_option = st.checkbox("➔ 옵션: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
 
 # 본문 대사 레이아웃 설정
 st.markdown("**본문 대사 레이아웃 설정**")
