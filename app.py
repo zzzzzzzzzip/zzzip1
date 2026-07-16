@@ -66,16 +66,36 @@ with col1:
 with col2:
     sys_end = st.text_input("시스템창 끝 문자", value="]", disabled=not use_system_window)
 
+# 게임 채팅 설정 구역
+st.markdown("**본문 게임 채팅창 레이아웃 설정**")
+use_game_chat = st.checkbox("특정 문자로 둘러싸인 줄을 '인게임 채팅방' 스타일로 만들기", value=False)
+col_g1, col_g2 = st.columns(2)
+with col_g1:
+    game_start = st.text_input("게임채팅 시작 문자", value="{", disabled=not use_game_chat)
+with col_g2:
+    game_end = st.text_input("게임채팅 끝 문자", value="}", disabled=not use_game_chat)
+
 # 본문 메신저(채팅창) 레이아웃 설정 구역
 st.markdown("**본문 메신저(채팅창) 레이아웃 설정**")
-use_chat_window = st.checkbox("특정 문자로 둘러싸인 줄을 '메신저 채팅방' 스타일로 만들기", value=False)
-col_chat1, col_chat2, col_chat3 = st.columns(3)
+use_chat_window = st.checkbox("특정 문자로 둘러싸인 줄을 '메신저 채팅방(iMessage)' 스타일로 만들기", value=False)
+col_chat1, col_chat2 = st.columns(2)
 with col_chat1:
     chat_start = st.text_input("메시지 시작 문자", value="<", disabled=not use_chat_window)
 with col_chat2:
     chat_end = st.text_input("메시지 끝 문자", value=">", disabled=not use_chat_window)
-with col_chat3:
-    my_char_name = st.text_input("내 이름 (우측 정렬 대상)", value="나", disabled=not use_chat_window, help="이름이 일치하는 메시지는 아이메시지처럼 우측에 파란색 말풍선으로 배치됩니다.")
+
+# [신규 기능] 인터넷 게시글 및 댓글 레이아웃 설정 구역
+st.markdown("**본문 인터넷 게시글 및 댓글 설정**")
+use_board_post = st.checkbox("특정 문자로 게시글(커뮤니티) 및 댓글 구현하기", value=False)
+col_b1, col_b2, col_b3, col_b4 = st.columns(4)
+with col_b1:
+    post_start = st.text_input("게시글 시작 문자", value="~", disabled=not use_board_post)
+with col_b2:
+    post_end = st.text_input("게시글 끝 문자", value="~", disabled=not use_board_post)
+with col_b3:
+    reply_start = st.text_input("댓글 시작 문자", value="|", disabled=not use_board_post)
+with col_b4:
+    reply_end = st.text_input("댓글 끝 문자", value="|", disabled=not use_board_post)
 
 # 본문 대사 레이아웃 설정
 st.markdown("**본문 대사 레이아웃 설정**")
@@ -190,7 +210,7 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # [개선] 아이메시지(iOS iMessage) 블루 스타일 시트 반영
+                # [개선] 인터넷 게시글 및 댓글 스타일 추가 탑재
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -214,10 +234,10 @@ if uploaded_file and title and author:
                 .chat-my-block { text-align: right; text-indent: 0; margin: 0.4em 0; }
                 .chat-bubble-my { 
                     display: inline-block; 
-                    background-color: #007aff; /* iMessage 파란색 */
-                    color: #ffffff; /* 흰색 글자 */
+                    background-color: #007aff; 
+                    color: #ffffff; 
                     padding: 8px 14px; 
-                    border-radius: 16px 16px 4px 16px; /* 둥근 말풍선 곡률 */
+                    border-radius: 16px 16px 4px 16px; 
                     max-width: 75%; 
                     text-align: left; 
                     font-size: 0.95em;
@@ -225,7 +245,7 @@ if uploaded_file and title and author:
                 .chat-other-block { text-align: left; text-indent: 0; margin: 0.4em 0; }
                 .chat-sender-name { 
                     font-size: 0.8em; 
-                    color: #8e8e93; /* 깔끔한 애플 실버그레이 */
+                    color: #8e8e93; 
                     font-weight: bold; 
                     display: block; 
                     margin-bottom: 2px; 
@@ -233,13 +253,83 @@ if uploaded_file and title and author:
                 }
                 .chat-bubble-other { 
                     display: inline-block; 
-                    background-color: #e9e9eb; /* 수신 메시지 회색 */
-                    color: #000000; /* 검은색 글자 */
+                    background-color: #e9e9eb; 
+                    color: #000000; 
                     padding: 8px 14px; 
-                    border-radius: 16px 16px 16px 4px; /* 둥근 말풍선 곡률 */
+                    border-radius: 16px 16px 16px 4px; 
                     max-width: 75%; 
                     text-align: left; 
                     font-size: 0.95em;
+                }
+                /* 게임 채팅 전용 블랙박스 */
+                .game-chat-box {
+                    background-color: #1c1c1e;
+                    border-left: 4px solid #8e8e93;
+                    padding: 8px 12px;
+                    margin: 0.4em 0.8em;
+                    text-indent: 0;
+                    border-radius: 4px;
+                    font-family: monospace, sans-serif;
+                    font-size: 0.9em;
+                    line-height: 1.4;
+                    text-align: left;
+                }
+                .g-normal { color: #ffffff; }
+                .g-party { color: #82ccdd; }
+                .g-guild { color: #78e08f; }
+                .g-whisper { color: #f8a5c2; }
+                .g-sys { color: #fad390; }
+                .g-team { color: #ff9f43; }
+                .g-friend { color: #feed6d; }
+
+                /* 인터넷 게시판 게시글 박스 */
+                .board-post-box {
+                    background-color: #fbfbfb;
+                    border: 1px solid #e1e4e6;
+                    border-radius: 6px;
+                    padding: 16px;
+                    margin: 0.8em 0.4em;
+                    text-indent: 0;
+                }
+                .board-post-title {
+                    font-size: 1.15em;
+                    font-weight: bold;
+                    color: #1e1e24;
+                    border-bottom: 2px solid #e1e4e6;
+                    padding-bottom: 10px;
+                    margin-bottom: 12px;
+                    text-indent: 0;
+                }
+                .board-post-content {
+                    font-size: 0.95em;
+                    color: #333333;
+                    line-height: 1.5;
+                    text-indent: 0;
+                }
+
+                /* 인터넷 게시판 댓글 세트 */
+                .board-reply-container {
+                    background-color: #f6f8fa;
+                    border: 1px solid #e1e4e6;
+                    border-radius: 6px;
+                    padding: 10px 14px;
+                    margin: 0.5em 0.4em;
+                    text-indent: 0;
+                }
+                .board-reply-item {
+                    font-size: 0.9em;
+                    border-bottom: 1px solid #eef1f2;
+                    padding: 6px 0;
+                    color: #444444;
+                    text-indent: 0;
+                }
+                .board-reply-item:last-child {
+                    border-bottom: none;
+                }
+                .board-reply-author {
+                    font-weight: bold;
+                    color: #1e272e;
+                    margin-right: 6px;
                 }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
@@ -275,10 +365,37 @@ if uploaded_file and title and author:
                     prev_is_dialogue = None
                     prev_is_system = False
                     prev_is_chat = False
+                    prev_is_game_chat = False
+                    
+                    # 게시글/댓글을 누적 수집하기 위한 임시 보관 리스트 및 상태
+                    post_buffer = []
+                    reply_buffer = []
+                    is_collecting_post = False
+                    is_collecting_reply = False
                     
                     for line in ch_lines:
                         # 1. 장면 전환 기호 우선 처리
                         if line == '* * *' or line.replace(' ', '') == '***':
+                            # 수집 중이던 게시글이나 댓글 블록 털어내기
+                            if is_collecting_post and post_buffer:
+                                p_title = post_buffer[0]
+                                p_body = "<br/>".join(post_buffer[1:]) if len(post_buffer) > 1 else ""
+                                html_content += f'<div class="board-post-box"><div class="board-post-title">{p_title}</div><div class="board-post-content">{p_body}</div></div>'
+                                post_buffer = []
+                                is_collecting_post = False
+                            
+                            if is_collecting_reply and reply_buffer:
+                                html_content += '<div class="board-reply-container">'
+                                for r_item in reply_buffer:
+                                    if ":" in r_item:
+                                        r_author, r_text = r_item.split(":", 1)
+                                        html_content += f'<div class="board-reply-item"><span class="board-reply-author">{r_author.strip()}</span>: {r_text.strip()}</div>'
+                                    else:
+                                        html_content += f'<div class="board-reply-item">{r_item}</div>'
+                                html_content += '</div>'
+                                reply_buffer = []
+                                is_collecting_reply = False
+
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += f'<p class="scene-divider">{line}</p>'
@@ -287,47 +404,149 @@ if uploaded_file and title and author:
                             prev_is_dialogue = None
                             prev_is_system = False
                             prev_is_chat = False
+                            prev_is_game_chat = False
                             continue
                         
-                        # 2. 메신저(채팅창) 조건 판단
+                        # [인터넷 게시글/댓글 수집 전처리 영역]
+                        # 가. 게시글 감지
+                        if use_board_post and post_start and post_end and line.startswith(post_start) and line.endswith(post_end):
+                            inner_post = line[len(post_start):-len(post_end)].strip()
+                            if not is_collecting_post:
+                                # 이전 요소 마무리
+                                if is_collecting_reply and reply_buffer:
+                                    html_content += '<div class="board-reply-container">'
+                                    for r_item in reply_buffer:
+                                        if ":" in r_item:
+                                            r_author, r_text = r_item.split(":", 1)
+                                            html_content += f'<div class="board-reply-item"><span class="board-reply-author">{r_author.strip()}</span>: {r_text.strip()}</div>'
+                                        else:
+                                            html_content += f'<div class="board-reply-item">{r_item}</div>'
+                                    html_content += '</div>'
+                                    reply_buffer = []
+                                    is_collecting_reply = False
+                                
+                                is_collecting_post = True
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            
+                            post_buffer.append(inner_post)
+                            prev_is_dialogue = None
+                            prev_is_system = False
+                            prev_is_chat = False
+                            prev_is_game_chat = False
+                            continue
+                        
+                        # 나. 댓글 감지
+                        elif use_board_post and reply_start and reply_end and line.startswith(reply_start) and line.endswith(reply_end):
+                            inner_reply = line[len(reply_start):-len(reply_end)].strip()
+                            if not is_collecting_reply:
+                                # 이전 요소 마무리
+                                if is_collecting_post and post_buffer:
+                                    p_title = post_buffer[0]
+                                    p_body = "<br/>".join(post_buffer[1:]) if len(post_buffer) > 1 else ""
+                                    html_content += f'<div class="board-post-box"><div class="board-post-title">{p_title}</div><div class="board-post-content">{p_body}</div></div>'
+                                    post_buffer = []
+                                    is_collecting_post = False
+                                
+                                is_collecting_reply = True
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            
+                            reply_buffer.append(inner_reply)
+                            prev_is_dialogue = None
+                            prev_is_system = False
+                            prev_is_chat = False
+                            prev_is_game_chat = False
+                            continue
+                        
+                        # 다. 수집 상태였는데 일반 텍스트가 나왔다면? 수집 완료 털어내기
+                        else:
+                            if is_collecting_post and post_buffer:
+                                p_title = post_buffer[0]
+                                p_body = "<br/>".join(post_buffer[1:]) if len(post_buffer) > 1 else ""
+                                html_content += f'<div class="board-post-box"><div class="board-post-title">{p_title}</div><div class="board-post-content">{p_body}</div></div>'
+                                post_buffer = []
+                                is_collecting_post = False
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            
+                            if is_collecting_reply and reply_buffer:
+                                html_content += '<div class="board-reply-container">'
+                                for r_item in reply_buffer:
+                                    if ":" in r_item:
+                                        r_author, r_text = r_item.split(":", 1)
+                                        html_content += f'<div class="board-reply-item"><span class="board-reply-author">{r_author.strip()}</span>: {r_text.strip()}</div>'
+                                    else:
+                                        html_content += f'<div class="board-reply-item">{r_item}</div>'
+                                html_content += '</div>'
+                                reply_buffer = []
+                                is_collecting_reply = False
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+
+                        # 2. 게임채팅 조건 판단 및 렌더링
+                        is_game_chat = False
+                        if use_game_chat and game_start and game_end:
+                            if line.startswith(game_start) and line.endswith(game_end):
+                                is_game_chat = True
+                        
+                        if is_game_chat:
+                            if not prev_is_game_chat:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            elif prev_is_game_chat:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            
+                            inner_text = line[len(game_start):-len(game_end)].strip()
+                            
+                            chat_class = "g-normal"
+                            if inner_text.startswith("[길드]"):
+                                chat_class = "g-guild"
+                            elif inner_text.startswith("[파티]"):
+                                chat_class = "g-party"
+                            elif inner_text.startswith("[귓속말]") or inner_text.startswith("[귓]"):
+                                chat_class = "g-whisper"
+                            elif inner_text.startswith("[시스템]") or inner_text.startswith("[공지]"):
+                                chat_class = "g-sys"
+                            elif inner_text.startswith("[팀]"):
+                                chat_class = "g-team"
+                            elif inner_text.startswith("[친구]") or inner_text.startswith("[친]"):
+                                chat_class = "g-friend"
+                            
+                            html_content += f'<div class="game-chat-box {chat_class}">{inner_text}</div>'
+                            
+                            prev_is_dialogue = None
+                            prev_is_system = False
+                            prev_is_chat = False
+                            prev_is_game_chat = True
+                            continue
+                            
+                        # 3. 메신저(채팅창) 렌더링 로직
                         is_chat = False
                         if use_chat_window and chat_start and chat_end:
                             if line.startswith(chat_start) and line.endswith(chat_end):
                                 is_chat = True
                         
-                        # 3. 메신저창 렌더링 로직
                         if is_chat:
+                            if prev_is_game_chat:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                                
                             if not prev_is_chat:
-                                html_content += '<p style="text-indent:0;">&nbsp;</p>' # 채팅 시작 전 빈 줄 추가
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             
                             inner_text = line[len(chat_start):-len(chat_end)].strip()
                             
-                            # 콜론(:) 기준으로 '보낸사람: 내용' 분리
                             if ":" in inner_text:
                                 msg_sender, msg_content = inner_text.split(":", 1)
                                 msg_sender = msg_sender.strip()
                                 msg_content = msg_content.strip()
+                                html_content += f'<div class="chat-other-block"><span class="chat-sender-name">{msg_sender}</span><span class="chat-bubble-other">{msg_content}</span></div>'
                             else:
-                                msg_sender = ""
-                                msg_content = inner_text
-                            
-                            # 보낸사람이 설정된 '내 캐릭터 이름'과 동일한 경우 우측 정렬 (파란색 iMessage)
-                            if msg_sender and my_char_name and msg_sender == my_char_name:
-                                html_content += f'<div class="chat-my-block"><span class="chat-bubble-my">{msg_content}</span></div>'
-                            else:
-                                # 보낸사람이 다른 사람인 경우 보낸사람 이름을 상단에 표시하고 좌측 정렬 (회색)
-                                if msg_sender:
-                                    html_content += f'<div class="chat-other-block"><span class="chat-sender-name">{msg_sender}</span><span class="chat-bubble-other">{msg_content}</span></div>'
-                                else:
-                                    html_content += f'<div class="chat-other-block"><span class="chat-bubble-other">{msg_content}</span></div>'
+                                html_content += f'<div class="chat-my-block"><span class="chat-bubble-my">{inner_text}</span></div>'
                             
                             prev_is_dialogue = None
                             prev_is_system = False
                             prev_is_chat = True
+                            prev_is_game_chat = False
                             
                         # 4. 시스템창 조건 판단
                         elif use_system_window and sys_start and sys_end and line.startswith(sys_start) and line.endswith(sys_end):
-                            if prev_is_chat:
+                            if prev_is_chat or prev_is_game_chat:
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             
                             if prev_is_system:
@@ -339,10 +558,11 @@ if uploaded_file and title and author:
                             prev_is_dialogue = None
                             prev_is_system = True
                             prev_is_chat = False
+                            prev_is_game_chat = False
                         
                         # 5. 일반 본문 / 대사 렌더링
                         else:
-                            if prev_is_chat or prev_is_system:
+                            if prev_is_chat or prev_is_system or prev_is_game_chat:
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             
                             is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
@@ -357,6 +577,22 @@ if uploaded_file and title and author:
                             prev_is_dialogue = is_dialogue
                             prev_is_system = False
                             prev_is_chat = False
+                            prev_is_game_chat = False
+
+                    # 루프 종료 후 혹시 남아있던 버퍼 털어내기
+                    if is_collecting_post and post_buffer:
+                        p_title = post_buffer[0]
+                        p_body = "<br/>".join(post_buffer[1:]) if len(post_buffer) > 1 else ""
+                        html_content += f'<div class="board-post-box"><div class="board-post-title">{p_title}</div><div class="board-post-content">{p_body}</div></div>'
+                    if is_collecting_reply and reply_buffer:
+                        html_content += '<div class="board-reply-container">'
+                        for r_item in reply_buffer:
+                            if ":" in r_item:
+                                r_author, r_text = r_item.split(":", 1)
+                                html_content += f'<div class="board-reply-item"><span class="board-reply-author">{r_author.strip()}</span>: {r_text.strip()}</div>'
+                            else:
+                                html_content += f'<div class="board-reply-item">{r_item}</div>'
+                        html_content += '</div>'
 
                     html_content += '</body></html>'
 
