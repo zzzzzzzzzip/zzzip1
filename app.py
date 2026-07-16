@@ -66,6 +66,17 @@ with col1:
 with col2:
     sys_end = st.text_input("시스템창 끝 문자", value="]", disabled=not use_system_window)
 
+# 본문 메신저(채팅창) 레이아웃 설정 구역
+st.markdown("**본문 메신저(채팅창) 레이아웃 설정**")
+use_chat_window = st.checkbox("특정 문자로 둘러싸인 줄을 '메신저 채팅방' 스타일로 만들기", value=False)
+col_chat1, col_chat2, col_chat3 = st.columns(3)
+with col_chat1:
+    chat_start = st.text_input("메시지 시작 문자", value="<", disabled=not use_chat_window)
+with col_chat2:
+    chat_end = st.text_input("메시지 끝 문자", value=">", disabled=not use_chat_window)
+with col_chat3:
+    my_char_name = st.text_input("내 이름 (우측 정렬 대상)", value="나", disabled=not use_chat_window, help="이름이 일치하는 메시지는 아이메시지처럼 우측에 파란색 말풍선으로 배치됩니다.")
+
 # 본문 대사 레이아웃 설정
 st.markdown("**본문 대사 레이아웃 설정**")
 dialogue_spacing_option = st.checkbox("대사(따옴표)와 일반 본문 사이에 자동으로 빈 줄 넣기", value=True)
@@ -131,7 +142,7 @@ if uploaded_file and title and author:
                         if not line: 
                             continue
                         
-                        # 도서명과 완전히 동일한 줄은 원천적으로 건너뜀
+                        # 도서명과 완전히 동일한 줄 삭제
                         if remove_title_lines_option and title:
                             normalized_line = line.replace(" ", "").lower()
                             normalized_title = title.replace(" ", "").lower()
@@ -179,7 +190,7 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # [개선] 시스템창 내부 정렬 방식을 text-align: center; 로 변경했습니다.
+                # [개선] 아이메시지(iOS iMessage) 블루 스타일 시트 반영
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -198,6 +209,37 @@ if uploaded_file and title and author:
                     font-size: 0.95em;
                     color: #1a4f8a;
                     font-weight: bold;
+                }
+                /* 아이메시지용 커스텀 스타일 */
+                .chat-my-block { text-align: right; text-indent: 0; margin: 0.4em 0; }
+                .chat-bubble-my { 
+                    display: inline-block; 
+                    background-color: #007aff; /* iMessage 파란색 */
+                    color: #ffffff; /* 흰색 글자 */
+                    padding: 8px 14px; 
+                    border-radius: 16px 16px 4px 16px; /* 둥근 말풍선 곡률 */
+                    max-width: 75%; 
+                    text-align: left; 
+                    font-size: 0.95em;
+                }
+                .chat-other-block { text-align: left; text-indent: 0; margin: 0.4em 0; }
+                .chat-sender-name { 
+                    font-size: 0.8em; 
+                    color: #8e8e93; /* 깔끔한 애플 실버그레이 */
+                    font-weight: bold; 
+                    display: block; 
+                    margin-bottom: 2px; 
+                    margin-left: 4px;
+                }
+                .chat-bubble-other { 
+                    display: inline-block; 
+                    background-color: #e9e9eb; /* 수신 메시지 회색 */
+                    color: #000000; /* 검은색 글자 */
+                    padding: 8px 14px; 
+                    border-radius: 16px 16px 16px 4px; /* 둥근 말풍선 곡률 */
+                    max-width: 75%; 
+                    text-align: left; 
+                    font-size: 0.95em;
                 }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
@@ -231,7 +273,8 @@ if uploaded_file and title and author:
                     
                     # 대사/본문 전환 자동 줄바꿈 렌더링 로직용 플래그
                     prev_is_dialogue = None
-                    prev_is_system = False # 이전 줄이 시스템창이었는지 판단하는 상태 기록 플래그
+                    prev_is_system = False
+                    prev_is_chat = False
                     
                     for line in ch_lines:
                         # 1. 장면 전환 기호 우선 처리
@@ -243,29 +286,63 @@ if uploaded_file and title and author:
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             prev_is_dialogue = None
                             prev_is_system = False
+                            prev_is_chat = False
                             continue
                         
-                        # 2. 시스템창 조건 판단
-                        is_system = False
-                        if use_system_window and sys_start and sys_end:
-                            if line.startswith(sys_start) and line.endswith(sys_end):
-                                is_system = True
+                        # 2. 메신저(채팅창) 조건 판단
+                        is_chat = False
+                        if use_chat_window and chat_start and chat_end:
+                            if line.startswith(chat_start) and line.endswith(chat_end):
+                                is_chat = True
                         
-                        # 3. [핵심 개선] 시스템창 관련 전후 빈 줄 자동 제어 규칙 적용
-                        if is_system:
+                        # 3. 메신저창 렌더링 로직
+                        if is_chat:
+                            if not prev_is_chat:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>' # 채팅 시작 전 빈 줄 추가
+                            
+                            inner_text = line[len(chat_start):-len(chat_end)].strip()
+                            
+                            # 콜론(:) 기준으로 '보낸사람: 내용' 분리
+                            if ":" in inner_text:
+                                msg_sender, msg_content = inner_text.split(":", 1)
+                                msg_sender = msg_sender.strip()
+                                msg_content = msg_content.strip()
+                            else:
+                                msg_sender = ""
+                                msg_content = inner_text
+                            
+                            # 보낸사람이 설정된 '내 캐릭터 이름'과 동일한 경우 우측 정렬 (파란색 iMessage)
+                            if msg_sender and my_char_name and msg_sender == my_char_name:
+                                html_content += f'<div class="chat-my-block"><span class="chat-bubble-my">{msg_content}</span></div>'
+                            else:
+                                # 보낸사람이 다른 사람인 경우 보낸사람 이름을 상단에 표시하고 좌측 정렬 (회색)
+                                if msg_sender:
+                                    html_content += f'<div class="chat-other-block"><span class="chat-sender-name">{msg_sender}</span><span class="chat-bubble-other">{msg_content}</span></div>'
+                                else:
+                                    html_content += f'<div class="chat-other-block"><span class="chat-bubble-other">{msg_content}</span></div>'
+                            
+                            prev_is_dialogue = None
+                            prev_is_system = False
+                            prev_is_chat = True
+                            
+                        # 4. 시스템창 조건 판단
+                        elif use_system_window and sys_start and sys_end and line.startswith(sys_start) and line.endswith(sys_end):
+                            if prev_is_chat:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            
                             if prev_is_system:
-                                # [규칙 B] 시스템창 ➔ 시스템창 연속일 때 물리적 빈 줄 1개 추가
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             else:
-                                # [규칙 A] 일반 본문/대사 ➔ 시스템창 전환일 때 물리적 빈 줄 1개 추가
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             
                             html_content += f'<p class="system-box">{line}</p>'
-                            prev_is_dialogue = None  # 흐름 초기화
+                            prev_is_dialogue = None
                             prev_is_system = True
+                            prev_is_chat = False
+                        
+                        # 5. 일반 본문 / 대사 렌더링
                         else:
-                            # [규칙 C] 시스템창 ➔ 일반 본문/대사 전환일 때 물리적 빈 줄 1개 추가
-                            if prev_is_system:
+                            if prev_is_chat or prev_is_system:
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             
                             is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
@@ -279,6 +356,7 @@ if uploaded_file and title and author:
                             html_content += f'<p>{line}</p>'
                             prev_is_dialogue = is_dialogue
                             prev_is_system = False
+                            prev_is_chat = False
 
                     html_content += '</body></html>'
 
