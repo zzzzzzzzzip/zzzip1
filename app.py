@@ -14,7 +14,6 @@ st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
 uploaded_file = st.file_uploader("파일 선택 (*.txt, *.epub)", type=["txt", "epub"])
-# [개선] 표지 이미지 업로더에 'webp' 확장자를 정식 추가했습니다.
 cover_file = st.file_uploader("표지 이미지 (*.jpg, *.png, *.webp) 선택 (선택사항)", type=["jpg", "jpeg", "png", "webp"])
 
 # --- 2. 책 정보 설정 ---
@@ -53,9 +52,11 @@ clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기
 
 # 다음 줄 소제목 설정 구역
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
-
-# 목차 연결 선택 옵션 체크박스
 join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
+
+# [신규 기능] 대사 앞뒤 자동 줄바꿈 옵션 추가
+st.markdown("**본문 대사 레이아웃 설정**")
+dialogue_spacing_option = st.checkbox("대사(따옴표)와 일반 본문 사이에 자동으로 빈 줄 넣기", value=True)
 
 st.info("💡 팁: 기존에 갖고 있던 EPUB 파일을 업로드하면 목차 구분 설정을 건드릴 필요 없이, 내 커스텀 스타일(화 제목 여백, 크기, * * * 가운데 정렬 및 줄바꿈)만 똑같이 입혀서 새로 내려받아 줍니다!")
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
@@ -139,17 +140,15 @@ if uploaded_file and title and author:
                     if current_chapter_lines or current_sub_title:
                         chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
 
-                # --- 공통: 내 커스텀 규칙대로 새 EPUB 빌드 구역 ---
+                # --- 공통: 새 EPUB 빌드 구역 ---
                 book = epub.EpubBook()
                 book.set_identifier('web_generated_id_12345')
                 book.set_title(title)
                 book.set_language('ko')
                 book.add_author(author)
 
-                # [개선] 표지 추가 시 업로드된 이미지 확장자를 동적으로 인식하여 저장
                 if cover_file:
                     cover_ext = os.path.splitext(cover_file.name)[1].lower()
-                    # webp일 경우 cover.webp로 저장하고 미디어 타입도 적절히 지정
                     if cover_ext == ".webp":
                         book.set_cover("cover.webp", cover_file.read())
                     else:
@@ -172,6 +171,9 @@ if uploaded_file and title and author:
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
+
+                # 대화/독백 따옴표 패턴 정의
+                dialogue_quotes = ("“", "”", '"', "‘", "’", "'")
 
                 epub_chapters = []
                 for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
@@ -196,16 +198,37 @@ if uploaded_file and title and author:
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     
+                    # [핵심 개선] 대사/본문 전환 자동 줄바꿈 렌더링 로직
+                    prev_is_dialogue = None # 이전 문단이 대사였는지 기록하는 상태 플래그
+                    
                     for line in ch_lines:
+                        # 1. 장면 전환 기호 우선 처리
                         if line == '* * *' or line.replace(' ', '') == '***':
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            f_div = f'<p class="scene-divider">{line}</p>'
-                            html_content += f_div
+                            html_content += f'<p class="scene-divider">{line}</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                        else:
-                            html_content += f'<p>{line}</p>'
+                            prev_is_dialogue = None # 장면이 전환되었으므로 대사 상태 초기화
+                            continue
+                        
+                        # 2. 이번 문단이 대사인지 여부 판단 (따옴표로 시작하거나 대화 마크(-) 등으로 시작할 때)
+                        is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
+                        
+                        # 3. 대사 Spacing 옵션이 켜져 있을 때 조건별 줄바꿈 삽입
+                        if dialogue_spacing_option and prev_is_dialogue is not None:
+                            # [조건 A] 일반 본문 ➔ 대사로 바뀔 때
+                            if not prev_is_dialogue and is_dialogue:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            # [조건 B] 대사 ➔ 일반 본문으로 돌아올 때
+                            elif prev_is_dialogue and not is_dialogue:
+                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                            # (대사 ➔ 대사 연속 상황이나 본문 ➔ 본문 연속 상황에서는 추가하지 않음!)
+
+                        # 4. 본문 문단 추가 및 상태 업데이트
+                        html_content += f'<p>{line}</p>'
+                        prev_is_dialogue = is_dialogue
+
                     html_content += '</body></html>'
 
                     chapter = epub.EpubHtml(title=display_title, file_name=f'chap_{i+1}.xhtml', lang='ko')
