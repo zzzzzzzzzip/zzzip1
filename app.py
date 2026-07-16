@@ -6,10 +6,10 @@ from ebooklib import epub
 from bs4 import BeautifulSoup
 
 # 웹페이지 기본 설정 (스마트폰 해상도 대응)
-st.set_page_config(page_title="EPUB 변환기", page_icon="📚", layout="centered")
+st.set_page_config(page_title="통합 EPUB 변환기", page_icon="📚", layout="centered")
 
-st.title("📚 TXT / EPUB 변환기")
-st.write("텍스트 파일 / 이펍 파일 변환하기")
+st.title("📚 TXT / EPUB 통합 변환기")
+st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완벽하게 재가공하세요!")
 
 # --- 1. 파일 업로드 구역 ---
 st.subheader("1. 파일 업로드")
@@ -24,12 +24,12 @@ author = st.text_input("작가명", value="작자미상")
 
 # --- 3. 목차 설정 구역 ---
 st.subheader("3. 목차 자동 구분 기준 (TXT 파일 전용)")
-toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택", "직접 단어 지정"], horizontal=True)
+toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택", "내가 직접 기준 단어 지정"], horizontal=True)
 
 if toc_mode == "제공되는 양식에서 선택":
     preset = st.selectbox(
         "양식 선택",
-        ["#001, #002", "제 1화, 제 2장", "Chapter 1, Chapter 2", "1., 2., 3."]
+        ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
     )
     if "#001" in preset: 
         toc_pattern = r"#\s*\d+.*"
@@ -48,14 +48,23 @@ else:
         toc_pattern = None
 
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
-clean_title_option = st.checkbox("목차에서 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
+clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 
-# [신규 기능] 도서명과 일치하는 본문 줄 삭제 옵션 추가
-remove_title_lines_option = st.checkbox("본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
+# 도서명과 일치하는 본문 줄 삭제 옵션
+remove_title_lines_option = st.checkbox("➔ 선택사항: 본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
 
 # 다음 줄 소제목 설정 구역
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
-join_title_option = st.checkbox("➔ 옵션: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
+join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
+
+# [신규 기능] 시스템창 디자인 설정 구역
+st.markdown("**본문 시스템창(상태창) 레이아웃 설정**")
+use_system_window = st.checkbox("특정 문자로 둘러싸인 줄을 '시스템창' 스타일 상자로 만들기", value=False)
+col1, col2 = st.columns(2)
+with col1:
+    sys_start = st.text_input("시스템창 시작 문자", value="[", disabled=not use_system_window)
+with col2:
+    sys_end = st.text_input("시스템창 끝 문자", value="]", disabled=not use_system_window)
 
 # 본문 대사 레이아웃 설정
 st.markdown("**본문 대사 레이아웃 설정**")
@@ -122,7 +131,7 @@ if uploaded_file and title and author:
                         if not line: 
                             continue
                         
-                        # [핵심 개선] 도서명과 완전히 동일한 줄은 원천적으로 건너뜀 (대소문자 및 공백 제거 비교로 정확도 상승)
+                        # 도서명과 완전히 동일한 줄은 원천적으로 건너뜀
                         if remove_title_lines_option and title:
                             normalized_line = line.replace(" ", "").lower()
                             normalized_title = title.replace(" ", "").lower()
@@ -170,7 +179,7 @@ if uploaded_file and title and author:
                                 book.set_cover("cover.jpg", item.get_content())
                                 break
 
-                # 스타일 시트
+                # [개선] 스타일 시트에 미려한 시스템창 (.system-box) 디자인 설계도를 반영했습니다.
                 style = '''
                 @page { margin: 5%; }
                 body { font-family: sans-serif; line-height: 1.6; }
@@ -178,6 +187,18 @@ if uploaded_file and title and author:
                 .sub-title { text-align: center; font-size: 1.1em; text-indent: 0; margin-top: 0; margin-bottom: 1.0em; }
                 p { text-indent: 1em; margin: 0 0 0.6em 0; text-align: justify; }
                 .scene-divider { text-align: center; text-indent: 0; margin: 0.5em 0; }
+                .system-box { 
+                    border: 1px solid #4a90e2; 
+                    background-color: #f0f6fc; 
+                    padding: 10px 14px; 
+                    margin: 0.8em 1em; 
+                    text-indent: 0; 
+                    border-radius: 6px; 
+                    text-align: left;
+                    font-size: 0.95em;
+                    color: #1a4f8a;
+                    font-weight: bold;
+                }
                 '''
                 nav_css = epub.EpubItem(uid="style_nav", file_name="style/nav.css", media_type="text/css", content=style)
                 book.add_item(nav_css)
@@ -212,6 +233,7 @@ if uploaded_file and title and author:
                     prev_is_dialogue = None
                     
                     for line in ch_lines:
+                        # 1. 장면 전환 기호 우선 처리
                         if line == '* * *' or line.replace(' ', '') == '***':
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -221,16 +243,29 @@ if uploaded_file and title and author:
                             prev_is_dialogue = None
                             continue
                         
-                        is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
+                        # 2. [개선] 시스템창 조건 판단
+                        is_system = False
+                        if use_system_window and sys_start and sys_end:
+                            # 설정된 시작 문자로 시작하고, 끝 문자로 끝나는 줄인지 확인
+                            if line.startswith(sys_start) and line.endswith(sys_end):
+                                is_system = True
                         
-                        if dialogue_spacing_option and prev_is_dialogue is not None:
-                            if not prev_is_dialogue and is_dialogue:
-                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            elif prev_is_dialogue and not is_dialogue:
-                                html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                        if is_system:
+                            # 시스템창은 들여쓰기가 없고 테두리가 감싸지는 특수한 스타일의 문단으로 추가합니다.
+                            html_content += f'<p class="system-box">{line}</p>'
+                            prev_is_dialogue = None  # 대사 흐름 리셋
+                        else:
+                            # 기존 대사/일반 본문 레이아웃 처리
+                            is_dialogue = line.startswith(dialogue_quotes) or line.startswith("-")
+                            
+                            if dialogue_spacing_option and prev_is_dialogue is not None:
+                                if not prev_is_dialogue and is_dialogue:
+                                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
+                                elif prev_is_dialogue and not is_dialogue:
+                                    html_content += '<p style="text-indent:0;">&nbsp;</p>'
 
-                        html_content += f'<p>{line}</p>'
-                        prev_is_dialogue = is_dialogue
+                            html_content += f'<p>{line}</p>'
+                            prev_is_dialogue = is_dialogue
 
                     html_content += '</body></html>'
 
