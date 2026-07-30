@@ -12,7 +12,6 @@ st.title("📚 TXT / EPUB 통합 변환기")
 st.write("텍스트 파일이나 기존 이펍을 내 커스텀 스타일로 완벽하게 재가공하세요!")
 
 # --- 세션 상태(Session State) 초기화 ---
-# 사용자가 버튼을 누를 때마다 입력 칸이 동적으로 늘어나도록 리스트로 관리합니다.
 if "sys_pairs" not in st.session_state:
     st.session_state.sys_pairs = [("[", "]")]
 if "game_pairs" not in st.session_state:
@@ -42,21 +41,34 @@ toc_mode = st.radio("설정 방식 선택", ["제공되는 양식에서 선택",
 if toc_mode == "제공되는 양식에서 선택":
     preset = st.selectbox(
         "양식 선택",
-        ["#001, #002 형태 (샵+숫자)", "제 1화, 제 2장 형태", "Chapter 1, Chapter 2 형태", "1., 2., 3. 형태"]
+        [
+            "숫자만 있는 형태 (1, 2, 3... 또는 01, 02...)",
+            "1., 2., 3. 형태 (숫자+점)",
+            "#001, #002 형태 (샵+숫자)",
+            "제 1화, 제 2장 형태",
+            "Chapter 1, Chapter 2 형태"
+        ]
     )
-    if "#001" in preset: 
+    if "숫자만 있는 형태" in preset:
+        # 줄 전체가 오직 숫자로만 구성되었거나 숫자로 시작하는 목차 인식
+        toc_pattern = r"^\s*\d+\s*$"
+    elif "1., 2." in preset:
+        toc_pattern = r"^\s*\d+\..*"
+    elif "#001" in preset: 
         toc_pattern = r"#\s*\d+.*"
     elif "제 1화" in preset: 
         toc_pattern = r"제\s*\d+\s*[화|장|편].*"
     elif "Chapter" in preset: 
         toc_pattern = r"Chapter\s*\d+.*"
-    else: 
-        toc_pattern = r"\d+\..*"
 else:
-    custom_word = st.text_input("기준 단어 입력", value="화")
+    custom_word = st.text_input("기준 단어 입력 (예: 화, 장, 또는 정규식)", value="화")
     if custom_word:
-        escaped_word = re.escape(custom_word)
-        toc_pattern = rf"\d+\s*{escaped_word}.*"
+        # 정규식 특수문자를 직접 넣었을 경우와 일반 단어 지정 구분
+        if any(char in custom_word for char in r"^$\.*+?()[]{}|"):
+            toc_pattern = custom_word
+        else:
+            escaped_word = re.escape(custom_word)
+            toc_pattern = rf"\d+\s*{escaped_word}.*"
     else:
         toc_pattern = None
 
@@ -68,7 +80,7 @@ sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인�
 join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
 
 
-# --- 💡 [핵심 개선] 동적 기호 레이아웃 생성 도우미 함수 ---
+# --- 동적 기호 레이아웃 생성 도우미 함수 ---
 def render_dynamic_inputs(section_title, state_key, checkbox_label):
     st.markdown(f"**{section_title}**")
     is_enabled = st.checkbox(checkbox_label, value=False, key=f"enable_{state_key}")
@@ -84,9 +96,8 @@ def render_dynamic_inputs(section_title, state_key, checkbox_label):
             with c2:
                 e_input = st.text_input(f"끝 기호 {idx+1}", value=end_val, key=f"{state_key}_e_{idx}")
             with c3:
-                st.write("") # 패딩용
+                st.write("")
                 st.write("") 
-                # 기호 쌍이 2개 이상일 때만 삭제 버튼 활성화
                 if st.button("❌ 삭제", key=f"del_{state_key}_{idx}", disabled=len(pairs) <= 1):
                     st.session_state[state_key].pop(idx)
                     st.rerun()
@@ -96,12 +107,10 @@ def render_dynamic_inputs(section_title, state_key, checkbox_label):
             st.session_state[state_key].append(("", ""))
             st.rerun()
             
-        # 화면 입력값을 세션 상태에 실시간 동기화
         st.session_state[state_key] = final_pairs
         return is_enabled, final_pairs
     return is_enabled, []
 
-# 각 레이아웃 구역 동적 입력창 구현
 use_system_window, final_sys_pairs = render_dynamic_inputs("본문 시스템창(상태창) 레이아웃 설정", "sys_pairs", "특정 문자로 둘러싸인 줄을 '시스템창' 스타일 상자로 만들기")
 use_game_chat, final_game_pairs = render_dynamic_inputs("본문 게임 채팅창 레이아웃 설정", "game_pairs", "특정 문자로 둘러싸인 줄을 '인게임 채팅방' 스타일로 만들기")
 use_chat_window, final_chat_pairs = render_dynamic_inputs("본문 메신저(채팅창) 레이아웃 설정", "chat_pairs", "특정 문자로 둘러싸인 줄을 '메신저 채팅방(iMessage)' 스타일로 만들기")
@@ -111,7 +120,6 @@ use_board_post = st.checkbox("특정 문자로 게시글(커뮤니티) 및 댓�
 final_post_pairs = []
 final_reply_pairs = []
 if use_board_post:
-    # 게시글 기호 동적 관리
     for idx, (s_v, e_v) in enumerate(st.session_state.post_pairs):
         c1, c2, c3 = st.columns([4, 4, 2])
         with c1: s_in = st.text_input(f"게시글 시작 {idx+1}", value=s_v, key=f"post_s_{idx}")
@@ -125,7 +133,6 @@ if use_board_post:
         st.session_state.post_pairs.append(("", "")); st.rerun()
     st.session_state.post_pairs = final_post_pairs
 
-    # 댓글 기호 동적 관리
     for idx, (s_v, e_v) in enumerate(st.session_state.reply_pairs):
         c1, c2, c3 = st.columns([4, 4, 2])
         with c1: s_in = st.text_input(f"댓글 시작 {idx+1}", value=s_v, key=f"reply_s_{idx}")
@@ -146,7 +153,6 @@ st.info("💡 팁: 기존에 갖고 있던 EPUB 파일을 업로드하면 목차
 st.caption("※ 들여쓰기는 문단 맨 앞에 1글자 크기(1em)로 자동 적용됩니다.")
 
 
-# --- 기호 일치 여부를 다중 쌍으로 체크하는 함수 ---
 def check_match(line, is_enabled, pairs):
     if not is_enabled:
         return False, "", ""
@@ -168,7 +174,6 @@ if uploaded_file and title and author:
                 is_epub = uploaded_file.name.endswith(".epub")
 
                 if is_epub:
-                    # --- 기존 EPUB 파일 파싱 구역 ---
                     epub_stream = io.BytesIO(uploaded_file.read())
                     input_book = epub.read_epub(epub_stream)
                     for item in input_book.get_items():
@@ -181,7 +186,6 @@ if uploaded_file and title and author:
                                 if ch_lines[0] == ch_title: ch_lines.pop(0)
                                 if ch_lines: chapters.append((ch_title, None, ch_lines))
                 else:
-                    # --- 기존 TXT 파일 파싱 구역 ---
                     raw_bytes = uploaded_file.read()
                     txt_content = None
                     encodings = ["utf-8-sig", "utf-8", "cp949", "utf-16", "euc-kr"]
@@ -209,7 +213,13 @@ if uploaded_file and title and author:
                             if current_chapter_lines or current_sub_title:
                                 chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
                                 current_chapter_lines, current_sub_title = [], None
-                            current_chapter_title = match.group().strip() if clean_title_option else line
+                            
+                            # 숫자만 있는 목차는 '1화' 또는 '1'로 깔끔하게 정제
+                            extracted_title = match.group().strip()
+                            if clean_title_option:
+                                current_chapter_title = extracted_title
+                            else:
+                                current_chapter_title = line
                         else:
                             if sub_title_option and not current_chapter_lines and current_sub_title is None and current_chapter_title != "프롤로그":
                                 current_sub_title = line
@@ -219,7 +229,6 @@ if uploaded_file and title and author:
                     if current_chapter_lines or current_sub_title:
                         chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
 
-                # --- 공통: 새 EPUB 빌드 구역 ---
                 book = epub.EpubBook()
                 book.set_identifier('web_generated_id_12345')
                 book.set_title(title)
@@ -303,14 +312,12 @@ if uploaded_file and title and author:
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
                             continue
                         
-                        # 다중 기호 쌍 매칭 확인
                         match_post, p_s, p_e = check_match(line, use_board_post, final_post_pairs)
                         match_reply, r_s, r_e = check_match(line, use_board_post, final_reply_pairs)
                         match_game, g_s, g_e = check_match(line, use_game_chat, final_game_pairs)
                         match_chat, c_s, c_e = check_match(line, use_chat_window, final_chat_pairs)
                         match_sys, s_s, s_e = check_match(line, use_system_window, final_sys_pairs)
 
-                        # 가. 게시글 감지
                         if match_post:
                             inner = line[len(p_s):-len(p_e)].strip()
                             if not is_collecting_post:
@@ -326,7 +333,6 @@ if uploaded_file and title and author:
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
                             continue
                         
-                        # 나. 댓글 감지
                         elif match_reply:
                             inner = line[len(r_s):-len(r_e)].strip()
                             if not is_collecting_reply:
@@ -340,7 +346,6 @@ if uploaded_file and title and author:
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
                             continue
                         
-                        # 다. 일반 라인 등장 시 모아둔 게시글/댓글 처리
                         else:
                             if is_collecting_post and post_buffer:
                                 html_content += f'<div class="board-post-box"><div class="board-post-title">{post_buffer[0]}</div><div class="board-post-content">{"<br/>".join(post_buffer[1:])}</div></div>'
@@ -353,7 +358,6 @@ if uploaded_file and title and author:
                                 reply_buffer, is_collecting_reply = [], False
                                 html_content += '<p style="text-indent:0;">&nbsp;</p>'
 
-                        # 라. 게임채팅 렌더링
                         if match_game:
                             if not prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             elif prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -370,7 +374,6 @@ if uploaded_file and title and author:
                             prev_is_system = prev_is_chat = False
                             prev_is_game_chat = True
                             
-                        # 마. 메신저창 렌더링
                         elif match_chat:
                             if prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             if not prev_is_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -384,7 +387,6 @@ if uploaded_file and title and author:
                             prev_is_system = prev_is_game_chat = False
                             prev_is_chat = True
                             
-                        # 바. 상태 시스템창 렌더링
                         elif match_sys:
                             if prev_is_chat or prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
@@ -393,7 +395,6 @@ if uploaded_file and title and author:
                             prev_is_system = True
                             prev_is_chat = prev_is_game_chat = False
                         
-                        # 사. 리얼 일반 본문 / 대사
                         else:
                             if prev_is_chat or prev_is_system or prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             is_d = line.startswith(dialogue_quotes) or line.startswith("-")
@@ -404,7 +405,6 @@ if uploaded_file and title and author:
                             prev_is_dialogue = is_d
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
 
-                    # 루프 종료 버퍼 청소
                     if is_collecting_post and post_buffer:
                         html_content += f'<div class="board-post-box"><div class="board-post-title">{post_buffer[0]}</div><div class="board-post-content">{"<br/>".join(post_buffer[1:])}</div></div>'
                     if is_collecting_reply and reply_buffer:
