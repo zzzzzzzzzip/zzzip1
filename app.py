@@ -2,6 +2,7 @@ import streamlit as st
 import io
 import os
 import re
+import html
 from ebooklib import epub
 from bs4 import BeautifulSoup
 
@@ -50,7 +51,6 @@ if toc_mode == "제공되는 양식에서 선택":
         ]
     )
     if "숫자만 있는 형태" in preset:
-        # 줄 전체가 오직 숫자로만 구성되었거나 숫자로 시작하는 목차 인식
         toc_pattern = r"^\s*\d+\s*$"
     elif "1., 2." in preset:
         toc_pattern = r"^\s*\d+\..*"
@@ -63,12 +63,12 @@ if toc_mode == "제공되는 양식에서 선택":
 else:
     custom_word = st.text_input("기준 단어 입력 (예: 화, 장, 또는 정규식)", value="화")
     if custom_word:
-        # 정규식 특수문자를 직접 넣었을 경우와 일반 단어 지정 구분
         if any(char in custom_word for char in r"^$\.*+?()[]{}|"):
             toc_pattern = custom_word
         else:
             escaped_word = re.escape(custom_word)
-            toc_pattern = rf"\d+\s*{escaped_word}.*"
+            # ★ 핵심 수정 1: '화가', '화도' 등 조사는 막고, 소제목이 붙은 '1화. 소제목' 등은 정상 감지
+            toc_pattern = rf"^\s*\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
     else:
         toc_pattern = None
 
@@ -214,7 +214,6 @@ if uploaded_file and title and author:
                                 chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
                                 current_chapter_lines, current_sub_title = [], None
                             
-                            # 숫자만 있는 목차는 '1화' 또는 '1'로 깔끔하게 정제
                             extracted_title = match.group().strip()
                             if clean_title_option:
                                 current_chapter_title = extracted_title
@@ -274,13 +273,17 @@ if uploaded_file and title and author:
 
                 epub_chapters = []
                 for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
-                    display_title = f"{ch_title} {ch_sub_title}" if sub_title_option and join_title_option and ch_sub_title else ch_title
+                    # ★ 핵심 수정 2: < > 태그 유실 방지 (html.escape)
+                    safe_ch_title = html.escape(ch_title)
+                    safe_ch_sub_title = html.escape(ch_sub_title) if ch_sub_title else None
+
+                    display_title = f"{safe_ch_title} {safe_ch_sub_title}" if sub_title_option and join_title_option and safe_ch_sub_title else safe_ch_title
                     html_content = f'<html><head><link rel="stylesheet" href="style/nav.css" type="text/css"/></head><body>'
                     html_content += '<p style="text-indent:0;">&nbsp;</p>'
                     html_content += f'<h2>{display_title}</h2>'
                     
-                    if ch_sub_title and not join_title_option:
-                        html_content += f'<p class="sub-title">{ch_sub_title}</p>'
+                    if safe_ch_sub_title and not join_title_option:
+                        html_content += f'<p class="sub-title">{safe_ch_sub_title}</p>'
                         html_content += '<p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p>'
                     else:
                         html_content += '<p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p>'
@@ -295,6 +298,9 @@ if uploaded_file and title and author:
                     is_collecting_reply = False
                     
                     for line in ch_lines:
+                        # ★ 핵심 수정 2 (계속): 본문 줄마다 escape 처리하여 <시스템> 기호가 태그로 사라지지 않도록 보호
+                        safe_line = html.escape(line)
+
                         if line == '* * *' or line.replace(' ', '') == '***':
                             if is_collecting_post and post_buffer:
                                 html_content += f'<div class="board-post-box"><div class="board-post-title">{post_buffer[0]}</div><div class="board-post-content">{"<br/>".join(post_buffer[1:])}</div></div>'
@@ -306,7 +312,7 @@ if uploaded_file and title and author:
                                 html_content += '</div>'
                                 reply_buffer, is_collecting_reply = [], False
                             html_content += '<p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p>'
-                            html_content += f'<p class="scene-divider">{line}</p>'
+                            html_content += f'<p class="scene-divider">{safe_line}</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p><p style="text-indent:0;">&nbsp;</p>'
                             prev_is_dialogue = None
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
@@ -319,7 +325,7 @@ if uploaded_file and title and author:
                         match_sys, s_s, s_e = check_match(line, use_system_window, final_sys_pairs)
 
                         if match_post:
-                            inner = line[len(p_s):-len(p_e)].strip()
+                            inner = safe_line[len(p_s):-len(p_e)].strip()
                             if not is_collecting_post:
                                 if is_collecting_reply and reply_buffer:
                                     html_content += '<div class="board-reply-container">'
@@ -334,7 +340,7 @@ if uploaded_file and title and author:
                             continue
                         
                         elif match_reply:
-                            inner = line[len(r_s):-len(r_e)].strip()
+                            inner = safe_line[len(r_s):-len(r_e)].strip()
                             if not is_collecting_reply:
                                 if is_collecting_post and post_buffer:
                                     html_content += f'<div class="board-post-box"><div class="board-post-title">{post_buffer[0]}</div><div class="board-post-content">{"<br/>".join(post_buffer[1:])}</div></div>'
@@ -361,7 +367,7 @@ if uploaded_file and title and author:
                         if match_game:
                             if not prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             elif prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            inner = line[len(g_s):-len(g_e)].strip()
+                            inner = safe_line[len(g_s):-len(g_e)].strip()
                             cc = "g-normal"
                             if inner.startswith("[길드]"): cc = "g-guild"
                             elif inner.startswith("[파티]"): cc = "g-party"
@@ -377,7 +383,7 @@ if uploaded_file and title and author:
                         elif match_chat:
                             if prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             if not prev_is_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            inner = line[len(c_s):-len(c_e)].strip()
+                            inner = safe_line[len(c_s):-len(c_e)].strip()
                             if ":" in inner:
                                 s, c = inner.split(":", 1)
                                 html_content += f'<div class="chat-other-block"><span class="chat-sender-name">{s.strip()}</span><span class="chat-bubble-other">{c.strip()}</span></div>'
@@ -390,7 +396,7 @@ if uploaded_file and title and author:
                         elif match_sys:
                             if prev_is_chat or prev_is_game_chat: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                             html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            html_content += f'<p class="system-box">{line}</p>'
+                            html_content += f'<p class="system-box">{safe_line}</p>'
                             prev_is_dialogue = None
                             prev_is_system = True
                             prev_is_chat = prev_is_game_chat = False
@@ -401,7 +407,7 @@ if uploaded_file and title and author:
                             if dialogue_spacing_option and prev_is_dialogue is not None:
                                 if not prev_is_dialogue and is_d: html_content += '<p style="text-indent:0;">&nbsp;</p>'
                                 elif prev_is_dialogue and not is_d: html_content += '<p style="text-indent:0;">&nbsp;</p>'
-                            html_content += f'<p>{line}</p>'
+                            html_content += f'<p>{safe_line}</p>'
                             prev_is_dialogue = is_d
                             prev_is_system = prev_is_chat = prev_is_game_chat = False
 
