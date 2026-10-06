@@ -67,8 +67,8 @@ else:
             toc_pattern = custom_word
         else:
             escaped_word = re.escape(custom_word)
-            # ★ 핵심 수정 1: '화가', '화도' 등 조사는 막고, 소제목이 붙은 '1화. 소제목' 등은 정상 감지
-            toc_pattern = rf"^\s*\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
+            # [개선] '외전', '특별편', '부록' 등 접두사 및 소제목까지 완벽 대응 정규식
+            toc_pattern = rf"^\s*(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
     else:
         toc_pattern = None
 
@@ -214,9 +214,10 @@ if uploaded_file and title and author:
                                 chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
                                 current_chapter_lines, current_sub_title = [], None
                             
-                            extracted_title = match.group().strip()
+                            # [핵심 수정] 소제목 유실 방지: 
+                            # clean_title_option이 켜져 있더라도 뒤에 이어지는 소제목 텍스트를 날리지 않고 전체 line을 유지합니다.
                             if clean_title_option:
-                                current_chapter_title = extracted_title
+                                current_chapter_title = line[match.start():].strip()
                             else:
                                 current_chapter_title = line
                         else:
@@ -273,7 +274,6 @@ if uploaded_file and title and author:
 
                 epub_chapters = []
                 for i, (ch_title, ch_sub_title, ch_lines) in enumerate(chapters):
-                    # ★ 핵심 수정 2: < > 태그 유실 방지 (html.escape)
                     safe_ch_title = html.escape(ch_title)
                     safe_ch_sub_title = html.escape(ch_sub_title) if ch_sub_title else None
 
@@ -298,7 +298,6 @@ if uploaded_file and title and author:
                     is_collecting_reply = False
                     
                     for line in ch_lines:
-                        # ★ 핵심 수정 2 (계속): 본문 줄마다 escape 처리하여 <시스템> 기호가 태그로 사라지지 않도록 보호
                         safe_line = html.escape(line)
 
                         if line == '* * *' or line.replace(' ', '') == '***':
