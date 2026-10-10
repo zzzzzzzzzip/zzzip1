@@ -22,9 +22,11 @@ PRESETS = {"블루": ("#f0f6fc", "#1a4f8a", "#4a90e2", "#007aff"),
            "다크": ("#252934", "#f2f4f8", "#8a9ab8", "#536dba"),
            "세피아": ("#f7f0e4", "#594736", "#b19a76", "#876d52"),
            "미니멀": ("#f5f5f5", "#303030", "#a0a0a0", "#525252")}
-TOC_PRESETS = {"제1화 / 제 1장": r"^\s*(?:(?:외전|특별편)\s*)?제?\s*\d+\s*[화장편](?:\s*[.．:：\-–—].*|\s+.*)?$",
+TOC_PRESETS = {"제1화 / 제 1장": r"^\s*[\[(【]?\s*(?:(?:외전|특별편)\s*)?제?\s*\d+\s*[화장편]\s*[\])】]?(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$",
                "숫자만 (1, 01)": r"^\s*\d+\s*$", "숫자와 점 (1. 제목)": r"^\s*\d+\.\s*.*$",
-               "#001": r"^\s*#\s*\d+.*$", "Chapter 1": r"^\s*Chapter\s+\d+.*$"}
+               "#001": r"^\s*#\s*\d+.*$", "Chapter 1": r"^\s*Chapter\s*\d+.*$"}
+TOC_PRESETS["제목 1화 (제목 + 화수)"] = r"^.+?\s+(?P<chapter>(?:제\s*)?\d+\s*[화장편])\s*[.．]?\s*$"
+AUTO_TOC_PATTERN = "(?:" + "|".join(TOC_PRESETS.values()) + ")"
 XML_BAD = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
 
@@ -71,7 +73,24 @@ def decode_txt(data, encoding="자동"):
     raise ValueError("텍스트 인코딩을 읽을 수 없습니다. 인코딩을 직접 선택해 주세요.")
 
 
-def parse_txt(data, title, pattern, *, encoding="자동", paragraph_mode="줄마다", blank_policy="제한 없이",
+def match_heading(line, matcher, title):
+    """줄 시작 또는 정확한 도서명 접두사 다음에서만 목차를 찾는다."""
+    match = matcher.search(line) if matcher else None
+    if match:
+        return match.groupdict().get("chapter") or line[match.start():].strip()
+    compact_title = re.sub(r"\s+", "", title)
+    if matcher and compact_title:
+        title_pattern = r"\s*".join(re.escape(char) for char in compact_title)
+        prefix = re.match(title_pattern, line, re.I)
+        if prefix:
+            rest = line[prefix.end():].lstrip(" \t-–—:：._~")
+            match = matcher.search(rest)
+            if match:
+                return match.groupdict().get("chapter") or rest[match.start():].strip()
+    return None
+
+
+def parse_txt(data, title, pattern, *, encoding="자동", paragraph_mode="줄마다",
               blank_toc=False, clean_title=True, remove_title=True, subtitle=False):
     text, detected = decode_txt(data, encoding)
     matcher = re.compile(pattern, re.I) if pattern else None
@@ -85,28 +104,24 @@ def parse_txt(data, title, pattern, *, encoding="자동", paragraph_mode="줄마
             continue
         if remove_title and title and re.sub(r"\s+", "", line).casefold() == re.sub(r"\s+", "", title).casefold():
             continue
-        match = matcher.search(line) if matcher else None
-        if match and blank_toc:
+        heading = match_heading(line, matcher, title)
+        if heading is not None and blank_toc:
             # 이름에 맞게 위 AND 아래 모두 빈 줄이어야 한다. 파일 경계는 빈 줄로 본다.
-            match = match if (i == 0 or not lines[i-1].strip()) and (i == len(lines)-1 or not lines[i+1].strip()) else None
-        if match:
+            heading = heading if (i == 0 or not lines[i-1].strip()) and (i == len(lines)-1 or not lines[i+1].strip()) else None
+        if heading is not None:
             if current.paragraphs or current.subtitle or current.title != "프롤로그":
                 chapters.append(current)
-            heading = line[match.start():].strip() if clean_title else line
-            if clean_title and title and heading.startswith(title):
-                heading = heading[len(title):].lstrip(" -:：.") or heading
-            current = Chapter(heading)
+            current = Chapter(heading if clean_title else line)
             pending_blank, waiting_sub = 0, subtitle
             continue
         if waiting_sub:
             current.subtitle, waiting_sub = line, False
             pending_blank = 0
             continue
-        blanks = 0 if blank_policy == "제거" else min(pending_blank, 2) if blank_policy == "최대 2줄" else pending_blank
         if paragraph_mode == "빈 줄마다" and not pending_blank and current.paragraphs:
             current.paragraphs[-1].text += "\n" + line
         else:
-            current.paragraphs.append(Paragraph(next_id, line, i+1, blanks))
+            current.paragraphs.append(Paragraph(next_id, line, i+1))
             next_id += 1
         pending_blank = 0
     if current.paragraphs or current.subtitle or current.title != "프롤로그":
@@ -340,7 +355,7 @@ img {{ max-width:100%; height:auto; }}
 """
 
 
-def render_chapter(chapter, rules, overrides, *, preserve_blank=True, dialogue_spacing=True, join_subtitle=False):
+def render_chapter(chapter, rules, overrides, *, dialogue_spacing=True, join_subtitle=False):
     title = chapter.title + (" " + chapter.subtitle if join_subtitle and chapter.subtitle else "")
     parts = [f"<h2>{esc(title)}</h2>"]
     if chapter.subtitle and not join_subtitle:
@@ -353,8 +368,6 @@ def render_chapter(chapter, rules, overrides, *, preserve_blank=True, dialogue_s
         style = block_key[0]
         chunks = []
         for index, (p, applied) in enumerate(block):
-            if index and preserve_blank and p.blank_before:
-                chunks.extend(['<p class="blank">&#160;</p>'] * p.blank_before)
             content = esc(applied["text"]).replace("\n", "<br />")
             if style == "chat":
                 raw = applied["text"]
@@ -388,8 +401,6 @@ def render_chapter(chapter, rules, overrides, *, preserve_blank=True, dialogue_s
         if style != "normal":
             if block_key != key:
                 flush()
-                if preserve_blank and p.blank_before:
-                    parts.extend(['<p class="blank">&#160;</p>'] * p.blank_before)
                 block_key = key
             block.append((p, applied))
             previous_dialogue = None
@@ -401,7 +412,7 @@ def render_chapter(chapter, rules, overrides, *, preserve_blank=True, dialogue_s
             previous_dialogue = None
             continue
         dialogue = p.text.startswith(("“", "”", '"', "‘", "’", "'", "-"))
-        blanks = p.blank_before if preserve_blank else 0
+        blanks = 0
         if dialogue_spacing and previous_dialogue is not None and previous_dialogue != dialogue:
             blanks = max(blanks, 1)
         parts.extend(['<p class="blank">&#160;</p>'] * blanks)
@@ -509,30 +520,29 @@ def main():
         title = st.text_input("도서명", key="book_title")
         author = st.text_input("작가명", value="작자미상")
         cover_file = st.file_uploader("표지 이미지 (선택)", type=["jpg", "jpeg", "png", "webp"])
-        encoding, mode, blank_policy = "자동", "줄마다", "최대 2줄"
+        encoding, mode = "자동", "줄마다"
         pattern, blank_toc, clean, remove, sub = None, False, True, True, False
         if not is_epub:
             encoding = st.selectbox("인코딩", ["자동", "utf-8", "utf-8-sig", "cp949", "euc-kr", "utf-16", "utf-16-le", "utf-16-be"])
             mode = st.selectbox("문단 구분", ["줄마다", "빈 줄마다"], help="기본값은 줄마다: 빈 줄 유무가 섞여 있어도 서로 다른 줄을 합치지 않습니다. 빈 줄마다 모드는 같은 문단 안의 줄바꿈을 유지합니다.")
-            blank_policy = st.selectbox("원문 빈 줄", ["최대 2줄", "제한 없이", "제거"])
-            toc_choice = st.selectbox("목차 인식", list(TOC_PRESETS) + ["기준 단어", "직접 정규식", "분리하지 않음"])
+            toc_choice = st.selectbox("목차 인식", ["자동 (일반적인 화수 형식)"] + list(TOC_PRESETS) + ["기준 단어", "직접 정규식", "분리하지 않음"])
             if toc_choice == "기준 단어":
                 word = st.text_input("숫자 뒤 기준 단어", value="화")
-                pattern = rf"^(?:(?:외전|특별편)\s*)?(?:제\s*)?\d+\s*{re.escape(word)}(?:\s*[.．:：\-–—].*|\s*$)" if word else None
+                pattern = rf"^[\[(【]?\s*(?:(?:외전|특별편)\s*)?(?:제\s*)?\d+\s*{re.escape(word)}\s*[\])】]?(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$" if word else None
             elif toc_choice == "직접 정규식":
                 pattern = st.text_input("목차 정규식", value=r"^제\s*\d+화.*$")
             else:
-                pattern = TOC_PRESETS.get(toc_choice)
+                pattern = AUTO_TOC_PATTERN if toc_choice == "자동 (일반적인 화수 형식)" else TOC_PRESETS.get(toc_choice)
             blank_toc = st.checkbox("목차 위와 아래가 모두 빈 줄인 경우에만 인정", value=False)
-            clean = st.checkbox("목차에서 일치 지점 앞 공통 제목 제거", value=True)
+            clean = st.checkbox("목차에서 공통 제목 제거 (화수와 소제목만 표시)", value=True)
             remove = st.checkbox("도서명과 같은 줄 제거", value=True)
             sub = st.checkbox("목차 다음 비어 있지 않은 줄을 소제목으로 사용", value=False)
             if sub:
                 st.caption("첫 본문 문장을 소제목으로 가져갈 수 있으므로 미리보기에서 확인해 주세요.")
-    parse_key = hashlib.sha256(json.dumps([source_hash, is_epub, title if not is_epub else "", encoding, mode, blank_policy, pattern, blank_toc, clean, remove, sub], ensure_ascii=False).encode()).hexdigest()
+    parse_key = hashlib.sha256(json.dumps([source_hash, is_epub, title if not is_epub else "", encoding, mode, pattern, blank_toc, clean, remove, sub], ensure_ascii=False).encode()).hexdigest()
     try:
         if st.session_state.get("parse_key") != parse_key:
-            document = parse_epub(data) if is_epub else parse_txt(data, title, pattern, encoding=encoding, paragraph_mode=mode, blank_policy=blank_policy, blank_toc=blank_toc, clean_title=clean, remove_title=remove, subtitle=sub)
+            document = parse_epub(data) if is_epub else parse_txt(data, title, pattern, encoding=encoding, paragraph_mode=mode, blank_toc=blank_toc, clean_title=clean, remove_title=remove, subtitle=sub)
             st.session_state.document = document
             st.session_state.parse_key = parse_key
             st.session_state.overrides = {}
@@ -543,6 +553,17 @@ def main():
         st.error(f"파일 분석 실패: {e}")
         return
     st.caption(f"{len(document.chapters)}개 화 · {sum(len(c.paragraphs) for c in document.chapters):,}개 문단" + (f" · {document.encoding}" if document.encoding else ""))
+    if not is_epub:
+        headings = [c.title for c in document.chapters if c.title != "프롤로그"]
+        with st.expander(f"목차 인식 결과: {len(headings)}개", expanded=not headings):
+            if headings:
+                st.text("\n".join(headings[:100]))
+                if len(headings) > 100:
+                    st.caption("앞 100개만 표시합니다.")
+            elif pattern:
+                st.warning("목차로 인식된 줄이 없습니다. 아래 원본 앞부분을 보고 목차 형식이나 기준 단어를 맞춰 주세요.")
+                st.text("\n".join(decode_txt(data, encoding)[0].splitlines()[:30]))
+                st.caption("화수 앞에 책 제목이 있으면 위 도서명을 원문 제목과 같게 입력해 주세요.")
     for warning in document.warnings:
         st.warning(warning)
     with st.expander("2. 디자인과 기호·단어 규칙", expanded=False):
@@ -673,7 +694,7 @@ def main():
         st.caption("JSON에는 문단별 지정 결과가 저장됩니다. 디자인·규칙 설정은 다시 선택해 주세요. 분석 옵션을 바꾸면 문단 번호가 바뀌므로 지정 결과는 초기화됩니다.")
     st.subheader("4. 미리보기와 EPUB 다운로드")
     st.caption("현재 목록 페이지에 해당하는 최대 80개 문단을 표시합니다. 브라우저와 실제 전자책 뷰어의 CSS 표현은 다를 수 있습니다.")
-    options = dict(preserve_blank=blank_policy!="제거", dialogue_spacing=dialogue, join_subtitle=join_sub)
+    options = dict(dialogue_spacing=dialogue, join_subtitle=join_sub)
     preview_chapter = Chapter(chapter.title, chapter.subtitle, shown)
     preview_body = render_chapter(preview_chapter, rules, overrides, **options)
     # 이미지 미리보기에는 파일 대신 data URL을 사용. EPUB 본문에는 원래 파일 참조를 유지한다.
