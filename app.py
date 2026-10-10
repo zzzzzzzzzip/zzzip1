@@ -295,6 +295,35 @@ def auto_candidates(chapter):
     return result
 
 
+def apply_auto_candidates(chapters, overrides):
+    """현재 지정한 수동 스타일은 유지하며 자동 후보를 한 번에 적용한다."""
+    changes, skipped = {}, 0
+    for chapter in chapters:
+        for pid, candidate in auto_candidates(chapter).items():
+            before = overrides.get(pid)
+            if before is not None and not before.get("group", "").startswith("auto-"):
+                skipped += 1
+                continue
+            value = {k: v for k, v in candidate.items() if k != "reason"}
+            if before != value:
+                changes[pid] = {"before": dict(before) if before is not None else None, "applied": value}
+                overrides[pid] = value
+    return changes, skipped
+
+
+def undo_auto_application(overrides, changes):
+    count = 0
+    for pid, change in changes.items():
+        # 자동 적용 이후 직접 수정한 문단은 되돌리기로 덮어쓰지 않는다.
+        if overrides.get(pid) == change["applied"]:
+            if change["before"] is None:
+                overrides.pop(pid, None)
+            else:
+                overrides[pid] = dict(change["before"])
+            count += 1
+    return count
+
+
 def match_rule(p, rules):
     for index, rule in enumerate(rules):
         if not rule.get("enabled", True):
@@ -516,6 +545,8 @@ def main():
         st.session_state.book_title = Path(filename).stem
         st.session_state.overrides = {}
         st.session_state.revision = 0
+        st.session_state.pop("auto_undo", None)
+        st.session_state.pop("auto_notice", None)
     with st.expander("1. 도서 정보와 텍스트 분석", expanded=True):
         title = st.text_input("도서명", key="book_title")
         author = st.text_input("작가명", value="작자미상")
@@ -547,6 +578,8 @@ def main():
             st.session_state.parse_key = parse_key
             st.session_state.overrides = {}
             st.session_state.revision += 1
+            st.session_state.pop("auto_undo", None)
+            st.session_state.pop("auto_notice", None)
             st.session_state.pop("epub_result", None)
         document = st.session_state.document
     except (ValueError, re.error, KeyError, OSError, zipfile.BadZipFile, ET.ParseError, UnicodeError) as e:
@@ -617,6 +650,26 @@ def main():
     chapter = document.chapters[ci]
     candidates = auto_candidates(chapter)
     overrides = st.session_state.overrides
+    st.markdown("**자동 인식 바로 적용**")
+    st.caption("검토·선택 없이 인식 결과를 한 번에 적용합니다. 직접 지정한 문단은 유지하며, 검색·페이지와 관계없이 선택한 범위의 모든 후보를 처리합니다.")
+    notice = st.session_state.pop("auto_notice", None)
+    if notice:
+        st.success(notice)
+    auto_current, auto_book = st.columns(2)
+    apply_current = auto_current.button("현재 화 자동 인식 전체 적용", disabled=not candidates)
+    apply_book = auto_book.button("책 전체 자동 인식 적용")
+    if apply_current or apply_book:
+        changes, skipped = apply_auto_candidates([chapter] if apply_current else document.chapters, overrides)
+        if changes:
+            st.session_state.auto_undo = changes
+            st.session_state.revision += 1
+        st.session_state.auto_notice = f"자동 인식 {len(changes):,}개 문단 적용 · 직접 지정한 {skipped:,}개 문단 유지" if changes or skipped else "새로 적용할 자동 인식 후보가 없습니다."
+        st.rerun()
+    if st.session_state.get("auto_undo") and st.button("마지막 자동 일괄 적용 되돌리기"):
+        restored_count = undo_auto_application(overrides, st.session_state.pop("auto_undo"))
+        st.session_state.revision += 1
+        st.session_state.auto_notice = f"자동 적용 {restored_count:,}개 문단을 되돌렸습니다. 이후 직접 수정한 문단은 유지됩니다."
+        st.rerun()
     search = st.text_input("본문 검색 (현재 화)", placeholder="꾸밀 문장을 찾아보세요")
     filtered = [p for p in chapter.paragraphs if not search or search.casefold() in p.text.casefold()]
     pages = max(1, (len(filtered)+79)//80)
@@ -646,7 +699,7 @@ def main():
                     overrides[pid] = {"style": style, "group": f"manual-{st.session_state.revision}"}
             st.rerun()
     with st.expander(f"자동 인식 후보 검토 ({len(candidates)}개 문단)"):
-        st.caption("추측이므로 자동 적용하지 않습니다. 각 후보는 원문과 함께 확인한 후 묶음 단위로 선택해 주세요.")
+        st.caption("위 버튼으로 한 번에 적용하거나, 여기서 원문을 보고 원하는 묶음만 선택해 적용할 수 있습니다.")
         groups = {}
         for p in chapter.paragraphs:
             if p.id in candidates:
@@ -687,6 +740,7 @@ def main():
                         raise ValueError("작업 파일에 잘못된 문단 또는 스타일이 있습니다.")
                     loaded[pid] = {"style": value["style"], "group": value.get("group", "")}
                 st.session_state.overrides = loaded
+                st.session_state.pop("auto_undo", None)
                 st.session_state.revision += 1
                 st.rerun()
             except (ValueError, TypeError, KeyError, AttributeError) as e:
