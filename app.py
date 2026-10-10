@@ -69,7 +69,7 @@ else:
             escaped_word = re.escape(custom_word)
             # ★ '화' 뒤에 구분자(점, 대시, 콜론, 괄호)가 있거나, 줄이 그대로 끝나는 형태만 매칭
             # (예: '1화.', '1화 -', '1화:', '1화 [소제목]', '1화' / 본문 '3화 선공개' 등은 차단)
-            toc_pattern = rf"(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?:\s*[\.\-\:\_\~\[\(\<{\]}]|\s*$)"
+            toc_pattern = rf"(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?:\s*[\.\-\:\_\~\[\(\<{{\]}}]|\s*$)"
     else:
         toc_pattern = None
 
