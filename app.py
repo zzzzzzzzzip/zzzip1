@@ -384,7 +384,7 @@ img {{ max-width:100%; height:auto; }}
 """
 
 
-def render_chapter(chapter, rules, overrides, *, dialogue_spacing=True, join_subtitle=False):
+def render_chapter(chapter, rules, overrides, *, dialogue_spacing=True, dialogue_blank_lines=1, join_subtitle=False):
     title = chapter.title + (" " + chapter.subtitle if join_subtitle and chapter.subtitle else "")
     parts = [f"<h2>{esc(title)}</h2>"]
     if chapter.subtitle and not join_subtitle:
@@ -443,7 +443,7 @@ def render_chapter(chapter, rules, overrides, *, dialogue_spacing=True, join_sub
         dialogue = p.text.startswith(("“", "”", '"', "‘", "’", "'", "-"))
         blanks = 0
         if dialogue_spacing and previous_dialogue is not None and previous_dialogue != dialogue:
-            blanks = max(blanks, 1)
+            blanks = max(blanks, dialogue_blank_lines)
         parts.extend(['<p class="blank">&#160;</p>'] * blanks)
         parts.append(f"<p>{content}</p>")
         previous_dialogue = dialogue
@@ -599,6 +599,9 @@ def main():
                 st.caption("화수 앞에 책 제목이 있으면 위 도서명을 원문 제목과 같게 입력해 주세요.")
     for warning in document.warnings:
         st.warning(warning)
+    dialogue_gap = st.selectbox("대사 앞뒤 빈 줄", [0, 1, 2], index=1,
+                                format_func=lambda n: "추가하지 않음" if n == 0 else f"{n}줄")
+    st.caption("대사와 일반 서술이 바뀌는 경계에 적용합니다. 연속된 대사 사이에는 추가하지 않습니다.")
     with st.expander("2. 디자인과 기호·단어 규칙", expanded=False):
         preset = st.selectbox("전체 디자인 프리셋", list(PRESETS))
         customize = st.checkbox("색상 직접 지정", value=False)
@@ -610,7 +613,6 @@ def main():
         body_size = st.slider("본문 글자 크기 (em)", 0.8, 1.4, 1.0, 0.05)
         heading_size = st.slider("화수 제목 크기 (em)", 1.0, 1.6, 1.2, 0.05)
         align = st.selectbox("본문 정렬", ["justify", "left"], format_func=lambda x: "양쪽 정렬" if x == "justify" else "왼쪽 정렬")
-        dialogue = st.checkbox("대사와 서술 전환 시 빈 줄 1줄", value=True)
         join_sub = st.checkbox("목차에 소제목 이어 붙이기", value=False, disabled=not sub)
         st.markdown("**기존 기호 방식 / 포함 단어 / 정규식**")
         st.caption("체크한 규칙은 바로 적용됩니다. 위 규칙이 우선이며, 직접 지정한 문단은 규칙보다 우선합니다. 기호는 원문에서 제거한 후 HTML로 변환합니다.")
@@ -748,7 +750,7 @@ def main():
         st.caption("JSON에는 문단별 지정 결과가 저장됩니다. 디자인·규칙 설정은 다시 선택해 주세요. 분석 옵션을 바꾸면 문단 번호가 바뀌므로 지정 결과는 초기화됩니다.")
     st.subheader("4. 미리보기와 EPUB 다운로드")
     st.caption("현재 목록 페이지에 해당하는 최대 80개 문단을 표시합니다. 브라우저와 실제 전자책 뷰어의 CSS 표현은 다를 수 있습니다.")
-    options = dict(dialogue_spacing=dialogue, join_subtitle=join_sub)
+    options = dict(dialogue_spacing=dialogue_gap > 0, dialogue_blank_lines=dialogue_gap, join_subtitle=join_sub)
     preview_chapter = Chapter(chapter.title, chapter.subtitle, shown)
     preview_body = render_chapter(preview_chapter, rules, overrides, **options)
     # 이미지 미리보기에는 파일 대신 data URL을 사용. EPUB 본문에는 원래 파일 참조를 유지한다.
