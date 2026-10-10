@@ -67,14 +67,16 @@ else:
             toc_pattern = custom_word
         else:
             escaped_word = re.escape(custom_word)
-            # [개선] 앞에 소설 제목이 붙어 있어도(제목 N화) 유연하게 패턴을 찾아내는 핵심 정규식
-            toc_pattern = rf"(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
+            # ★ '화' 뒤에 구분자(점, 대시, 콜론, 괄호)가 있거나, 줄이 그대로 끝나는 형태만 매칭
+            # (예: '1화.', '1화 -', '1화:', '1화 [소제목]', '1화' / 본문 '3화 선공개' 등은 차단)
+            toc_pattern = rf"(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?:\s*[\.\-\:\_\~\[\(\<{\]}]|\s*$)"
     else:
         toc_pattern = None
 
 st.markdown("**목차 텍스트 정제 설정 (TXT 파일 전용)**")
 clean_title_option = st.checkbox("목차에서 공통 소설 제목 제외하기 (화수와 소제목만 남기기)", value=True)
 remove_title_lines_option = st.checkbox("➔ 선택사항: 본문에서 도서명(제목)과 똑같은 줄은 자동으로 삭제하기", value=True)
+require_blank_line_option = st.checkbox("목차 줄 위아래에 빈 줄(줄바꿈)이 있는 경우만 목차로 인정하기", value=True)
 
 sub_title_option = st.checkbox("화수 제목 다음 줄을 소제목으로 인식하여 효과 적용하기", value=False)
 join_title_option = st.checkbox("➔ 선택사항: 목차(화수) 뒤에 소제목을 이어서 표시하기", value=False, disabled=not sub_title_option)
@@ -202,29 +204,39 @@ if uploaded_file and title and author:
                     current_chapter_lines = []
                     compiled_pattern = re.compile(toc_pattern)
 
-                    for line in lines:
-                        line = line.strip()
-                        if not line: continue
+                    for idx, line in enumerate(lines):
+                        line_stripped = line.strip()
+                        if not line_stripped: continue
                         if remove_title_lines_option and title:
-                            if line.replace(" ", "").lower() == title.replace(" ", "").lower(): continue
+                            if line_stripped.replace(" ", "").lower() == title.replace(" ", "").lower(): continue
                         
-                        match = compiled_pattern.search(line)
+                        match = compiled_pattern.search(line_stripped)
+                        is_valid_toc = False
+
                         if match:
+                            is_valid_toc = True
+                            # [위아래 빈 줄 확인 옵션]
+                            if require_blank_line_option:
+                                prev_blank = (idx == 0) or (lines[idx-1].strip() == "")
+                                next_blank = (idx == len(lines) - 1) or (lines[idx+1].strip() == "")
+                                # 위 또는 아래 중 하나라도 빈 줄이 있어야 목차로 판별
+                                if not (prev_blank or next_blank):
+                                    is_valid_toc = False
+
+                        if is_valid_toc:
                             if current_chapter_lines or current_sub_title:
                                 chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
                                 current_chapter_lines, current_sub_title = [], None
                             
-                            # [핵심 파싱 처리] 
-                            # clean_title_option이 켜져 있으면 앞쪽의 공통 제목은 지우고 매칭된 위치('1화...')부터 추출
                             if clean_title_option:
-                                current_chapter_title = line[match.start():].strip()
+                                current_chapter_title = line_stripped[match.start():].strip()
                             else:
-                                current_chapter_title = line
+                                current_chapter_title = line_stripped
                         else:
                             if sub_title_option and not current_chapter_lines and current_sub_title is None and current_chapter_title != "프롤로그":
-                                current_sub_title = line
+                                current_sub_title = line_stripped
                             else:
-                                current_chapter_lines.append(line)
+                                current_chapter_lines.append(line_stripped)
                             
                     if current_chapter_lines or current_sub_title:
                         chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
