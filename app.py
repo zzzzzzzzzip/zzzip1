@@ -354,9 +354,9 @@ def make_css(preset="블루", indent=1.0, body_size=1.0, heading_size=1.2, align
     bg, fg, border, accent = palette or PRESETS[preset]
     return f"""@page {{ margin: 5%; }}
 body {{ font-family: sans-serif; line-height:1.6; font-size:{body_size}em; }}
-h2 {{ text-align:center; font-size:{heading_size}em; margin:3.2em 0 1.8em; font-weight:bold; }}
+h2 {{ text-align:center; font-size:{heading_size}em; margin:1.5em 0 .2em; font-weight:bold; }}
 p {{ text-indent:{indent}em; margin:0 0 .6em; text-align:{align}; }}
-.subtitle {{ text-align:center; text-indent:0; font-size:1.05em; margin:-1.2em 0 2em; }}
+.subtitle {{ text-align:center; text-indent:0; font-size:1.05em; margin:0 0 1em; }}
 .blank {{ text-indent:0; margin:0; line-height:1.6; }}
 .scene {{ text-align:center; text-indent:0; margin:1.6em 0; }}
 .image {{ text-indent:0; text-align:center; }}
@@ -386,9 +386,10 @@ img {{ max-width:100%; height:auto; }}
 
 def render_chapter(chapter, rules, overrides, *, dialogue_spacing=True, dialogue_blank_lines=1, join_subtitle=False):
     title = chapter.title + (" " + chapter.subtitle if join_subtitle and chapter.subtitle else "")
-    parts = [f"<h2>{esc(title)}</h2>"]
+    parts = ['<p class="blank">&#160;</p>', f"<h2>{esc(title)}</h2>"]
     if chapter.subtitle and not join_subtitle:
         parts.append(f'<p class="subtitle">{esc(chapter.subtitle)}</p>')
+    parts.extend(['<p class="blank">&#160;</p>'] * 3)
     block, block_key, previous_dialogue = [], None, None
     def flush():
         nonlocal block, block_key
@@ -602,6 +603,7 @@ def main():
     dialogue_gap = st.selectbox("대사 앞뒤 빈 줄", [0, 1, 2], index=1,
                                 format_func=lambda n: "추가하지 않음" if n == 0 else f"{n}줄")
     st.caption("대사와 일반 서술이 바뀌는 경계에 적용합니다. 연속된 대사 사이에는 추가하지 않습니다.")
+    st.caption("기존 제목 간격 유지: 제목 위 빈 줄 1줄, 제목·소제목과 본문 사이 빈 줄 3줄.")
     with st.expander("2. 디자인과 기호·단어 규칙", expanded=False):
         preset = st.selectbox("전체 디자인 프리셋", list(PRESETS))
         customize = st.checkbox("색상 직접 지정", value=False)
