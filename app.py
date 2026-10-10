@@ -67,8 +67,8 @@ else:
             toc_pattern = custom_word
         else:
             escaped_word = re.escape(custom_word)
-            # [개선] '외전', '특별편', '부록' 등 접두사 및 소제목까지 완벽 대응 정규식
-            toc_pattern = rf"^\s*(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
+            # [개선] 앞에 소설 제목이 붙어 있어도(제목 N화) 유연하게 패턴을 찾아내는 핵심 정규식
+            toc_pattern = rf"(?:(?:외전|특별편|부록)\s*)?\d+\s*{escaped_word}(?![가-힣a-zA-Z0-9])"
     else:
         toc_pattern = None
 
@@ -214,8 +214,8 @@ if uploaded_file and title and author:
                                 chapters.append((current_chapter_title, current_sub_title, current_chapter_lines))
                                 current_chapter_lines, current_sub_title = [], None
                             
-                            # [핵심 수정] 소제목 유실 방지: 
-                            # clean_title_option이 켜져 있더라도 뒤에 이어지는 소제목 텍스트를 날리지 않고 전체 line을 유지합니다.
+                            # [핵심 파싱 처리] 
+                            # clean_title_option이 켜져 있으면 앞쪽의 공통 제목은 지우고 매칭된 위치('1화...')부터 추출
                             if clean_title_option:
                                 current_chapter_title = line[match.start():].strip()
                             else:
