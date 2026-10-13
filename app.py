@@ -22,10 +22,11 @@ PRESETS = {"블루": ("#f0f6fc", "#1a4f8a", "#4a90e2", "#007aff"),
            "다크": ("#252934", "#f2f4f8", "#8a9ab8", "#536dba"),
            "세피아": ("#f7f0e4", "#594736", "#b19a76", "#876d52"),
            "미니멀": ("#f5f5f5", "#303030", "#a0a0a0", "#525252")}
-TOC_PRESETS = {"제1화 / 제 1장": r"^\s*[\[(【]?\s*(?:(?:외전|특별편)\s*)?제?\s*\d+\s*[화장편]\s*[\])】]?(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$",
+CHAPTER_ANNOTATION = r"(?:\s*(?:\([^()\n]*\)|（[^（）\n]*）|\[[^\[\]\n]*\]))*"
+TOC_PRESETS = {"제1화 / 제 1장": rf"^\s*[\[(【]?\s*(?:(?:외전|특별편)\s*)?제?\s*\d+\s*[화장편]\s*[\])】]?{CHAPTER_ANNOTATION}(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$",
                "숫자만 (1, 01)": r"^\s*\d+\s*$", "숫자와 점 (1. 제목)": r"^\s*\d+\.\s*.*$",
                "#001": r"^\s*#\s*\d+.*$", "Chapter 1": r"^\s*Chapter\s*\d+.*$"}
-TOC_PRESETS["제목 1화 (제목 + 화수)"] = r"^.+?\s+(?P<chapter>(?:제\s*)?\d+\s*[화장편])\s*[.．]?\s*$"
+TOC_PRESETS["제목 1화 (제목 + 화수)"] = rf"^.+?\s+(?P<chapter>(?:제\s*)?\d+\s*[화장편]{CHAPTER_ANNOTATION})\s*[.．]?\s*$"
 AUTO_TOC_PATTERN = "(?:" + "|".join(TOC_PRESETS.values()) + ")"
 XML_BAD = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 
@@ -560,7 +561,7 @@ def main():
             toc_choice = st.selectbox("목차 인식", ["자동 (일반적인 화수 형식)"] + list(TOC_PRESETS) + ["기준 단어", "직접 정규식", "분리하지 않음"])
             if toc_choice == "기준 단어":
                 word = st.text_input("숫자 뒤 기준 단어", value="화")
-                pattern = rf"^[\[(【]?\s*(?:(?:외전|특별편)\s*)?(?:제\s*)?\d+\s*{re.escape(word)}\s*[\])】]?(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$" if word else None
+                pattern = rf"^[\[(【]?\s*(?:(?:외전|특별편)\s*)?(?:제\s*)?\d+\s*{re.escape(word)}\s*[\])】]?{CHAPTER_ANNOTATION}(?:\s*[.．:：\-–—_~].*|\s+.*)?\s*$" if word else None
             elif toc_choice == "직접 정규식":
                 pattern = st.text_input("목차 정규식", value=r"^제\s*\d+화.*$")
             else:
